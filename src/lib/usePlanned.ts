@@ -1,7 +1,8 @@
 import { useMemo } from 'react'
 import { useStore, type Tx } from './store'
 import { occurrencesInMonth, paidIndex, monthStart, type Occurrence } from './planned'
-import { daysInMonth, monthKey } from './format'
+import { daysInMonth, dayKey, monthKey } from './format'
+import { computeAllowance, type Allowance } from './allowance'
 
 export function useOccurrences(month: string) {
   const { planned, txs } = useStore()
@@ -42,22 +43,36 @@ export interface Forecast {
   willSpend: number
   willReceive: number
   endBalance: number
+  allowance: Allowance
+  goal: number
 }
 
 // Previsão do mês: o que já saiu + contas em aberto + ritmo dos gastos do dia a dia (sem as contas)
 export function useForecast(month: string): Forecast {
-  const { txs } = useStore()
+  const { txs, profile } = useStore()
   const occ = useOccurrences(month)
+  const goal = profile?.savings_goal ?? 0
   return useMemo(() => {
     const now = new Date()
     const current = monthKey(now)
     const phase = month < current ? 'past' : month > current ? 'future' : 'current'
     let spent = 0
     let received = 0
+    let spentVariable = 0
+    let spentVariableToday = 0
+    const today = dayKey(now)
     for (const t of txs) {
-      if (monthKey(new Date(t.occurred_at)) !== month) continue
-      if (t.kind === 'expense') spent += t.amount
-      else received += t.amount
+      const d = new Date(t.occurred_at)
+      if (monthKey(d) !== month) continue
+      if (t.kind === 'income') {
+        received += t.amount
+        continue
+      }
+      spent += t.amount
+      if (!t.planned_id) {
+        spentVariable += t.amount
+        if (dayKey(d) === today) spentVariableToday += t.amount
+      }
     }
     const exp = summarize(occ, 'expense')
     const inc = summarize(occ, 'income')
@@ -65,7 +80,7 @@ export function useForecast(month: string): Forecast {
     const incomeOpen = phase === 'past' ? 0 : inc.open
     const days = daysInMonth(month)
     const elapsed = phase === 'current' ? now.getDate() : days
-    const variableAhead = phase === 'current' ? ((spent - exp.paid) / elapsed) * (days - elapsed) : 0
+    const variableAhead = phase === 'current' ? (spentVariable / elapsed) * (days - elapsed) : 0
     const willSpend = spent + billsOpen + Math.max(0, variableAhead)
     const willReceive = received + incomeOpen
     return {
@@ -79,8 +94,21 @@ export function useForecast(month: string): Forecast {
       willSpend,
       willReceive,
       endBalance: willReceive - willSpend,
+      goal,
+      allowance: computeAllowance({
+        phase,
+        days,
+        day: now.getDate(),
+        spent,
+        spentVariable,
+        spentVariableToday,
+        received,
+        billsOpen,
+        incomeOpen,
+        goal,
+      }),
     }
-  }, [txs, occ, month])
+  }, [txs, occ, month, goal])
 }
 
 // Lançamento que paga a ocorrência

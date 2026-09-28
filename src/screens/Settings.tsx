@@ -221,6 +221,7 @@ export function Settings({ notify }: { notify: (m: string) => void }) {
   }, [])
   const [name, setName] = useState(profile?.name ?? '')
   const [budget, setBudget] = useState(profile?.monthly_budget ? String(profile.monthly_budget).replace('.', ',') : '')
+  const [goal, setGoal] = useState(profile?.savings_goal ? String(profile.savings_goal).replace('.', ',') : '')
   const [editing, setEditing] = useState<{ cat: Category | null; kind: Kind } | null>(null)
   const [guide, setGuide] = useState(false)
   const [catKind, setCatKind] = useState<Kind>('expense')
@@ -228,9 +229,11 @@ export function Settings({ notify }: { notify: (m: string) => void }) {
 
   const saveProfile = async () => {
     const b = budget.trim() ? Number(budget.replace(/\./g, '').replace(',', '.')) : null
-    if (b != null && !(b > 0)) return notify('Orçamento inválido')
+    if (b != null && !(b > 0)) return notify('Limite inválido')
+    const g = goal.trim() ? Number(goal.replace(/./g, '').replace(',', '.')) : null
+    if (g != null && !(g >= 0)) return notify('Meta inválida')
     try {
-      await updateProfile({ name: name.trim() || null, monthly_budget: b })
+      await updateProfile({ name: name.trim() || null, monthly_budget: b, savings_goal: g })
       notify('Salvo')
     } catch (e) {
       notify(`Erro: ${(e as Error).message}`)
@@ -258,7 +261,10 @@ export function Settings({ notify }: { notify: (m: string) => void }) {
     setTimeout(() => URL.revokeObjectURL(a.href), 1000)
   }
 
-  const dirty = name !== (profile?.name ?? '') || budget !== (profile?.monthly_budget ? String(profile.monthly_budget).replace('.', ',') : '')
+  const dirty =
+    name !== (profile?.name ?? '') ||
+    budget !== (profile?.monthly_budget ? String(profile.monthly_budget).replace('.', ',') : '') ||
+    goal !== (profile?.savings_goal ? String(profile.savings_goal).replace('.', ',') : '')
   const shownCats = categories.filter((c) => c.kind === catKind)
 
   return (
@@ -269,6 +275,11 @@ export function Settings({ notify }: { notify: (m: string) => void }) {
         <label className="field">
           <span>Seu nome</span>
           <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Bruno" />
+        </label>
+        <label className="field">
+          <span>Quero guardar por mês (R$)</span>
+          <input className="input" inputMode="decimal" value={goal} onChange={(e) => setGoal(e.target.value)} placeholder="Ex.: 2.000" />
+          <div className="hint" style={{ margin: '6px 4px 0' }}>O "quanto posso gastar por dia" já desconta esse valor.</div>
         </label>
         <label className="field" style={{ marginBottom: 14 }}>
           <span>Limite de gastos por mês (opcional)</span>
