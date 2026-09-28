@@ -3,7 +3,7 @@ import { useStore } from '../lib/store'
 import { MonthSwitch } from '../components/MonthSwitch'
 import { brl, brl0, daysInMonth, MONTHS, monthKey, monthLabel, shiftMonth } from '../lib/format'
 import { byCategory, dailyExpense, monthTxs, totals, type CatTotal } from '../lib/stats'
-import { summarize, useOccurrences } from '../lib/usePlanned'
+import { useForecast } from '../lib/usePlanned'
 
 const MAX_SLICES = 7
 
@@ -71,7 +71,7 @@ export function Insights({ month, setMonth }: { month: string; setMonth: (m: str
   const [selMonth, setSelMonth] = useState<string | null>(null)
 
   const mTxs = useMemo(() => monthTxs(txs, month), [txs, month])
-  const occ = useOccurrences(month)
+  const f = useForecast(month)
   const t = totals(mTxs)
   const prev = totals(monthTxs(txs, shiftMonth(month, -1)))
 
@@ -97,10 +97,7 @@ export function Insights({ month, setMonth }: { month: string; setMonth: (m: str
   const elapsed = isCurrent ? new Date().getDate() : days
   const avg = t.expense / Math.max(1, elapsed)
   const maxDay = Math.max(...daily, avg, 1)
-  // Projeção = já gasto + contas previstas em aberto + ritmo dos gastos do dia a dia (sem as contas) nos dias que faltam
-  const planExp = summarize(occ, 'expense')
-  const variableAvg = (t.expense - planExp.paid) / Math.max(1, elapsed)
-  const projection = isCurrent ? t.expense + planExp.open + variableAvg * (days - elapsed) : null
+  const projection = isCurrent ? f.willSpend : null
 
   const history = useMemo(
     () =>

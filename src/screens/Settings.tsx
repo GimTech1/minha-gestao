@@ -271,8 +271,9 @@ export function Settings({ notify }: { notify: (m: string) => void }) {
           <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Bruno" />
         </label>
         <label className="field" style={{ marginBottom: 14 }}>
-          <span>Orçamento mensal de gastos (R$)</span>
+          <span>Limite de gastos por mês (opcional)</span>
           <input className="input" inputMode="decimal" value={budget} onChange={(e) => setBudget(e.target.value)} placeholder="Ex.: 4.000" />
+          <div className="hint" style={{ margin: '6px 4px 0' }}>Não é sua renda. Salário e outras entradas vão em Extrato → Previstos → A receber.</div>
         </label>
         <button className="btn" style={{ width: '100%' }} onClick={saveProfile} disabled={!dirty}>Salvar</button>
       </div>

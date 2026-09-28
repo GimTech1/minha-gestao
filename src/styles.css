@@ -364,3 +364,10 @@ select.input { -webkit-appearance: none; appearance: none; }
 .toggle-row.on .box { background: var(--green); border-color: var(--green); color: #04210f; }
 .toggle-row .muted { font-size: 12px; }
 .login .btn { flex: none; width: 100%; }
+
+/* ---------- topo: gastei / vou gastar / fim do mês ---------- */
+.hero-pill .sub { font-size: 11px; opacity: 0.7; margin-top: 1px; }
+.hero-pill.pos .v { color: #c6ff4d; }
+.hero-pill.neg { background: rgba(120, 0, 20, 0.35); }
+.hero-pill.neg .v { color: #ffc2c2; }
+.hero-notes { position: relative; z-index: 1; margin-top: 12px; font-size: 12px; line-height: 1.5; opacity: 0.85; }

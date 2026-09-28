@@ -4,7 +4,7 @@ import { MonthSwitch } from '../components/MonthSwitch'
 import { TxList } from '../components/TxList'
 import { brl, brl0, daysInMonth, greeting, monthKey, monthLabel, shiftMonth } from '../lib/format'
 import { byCategory, monthTxs, spentSince, startOfWeek, totals } from '../lib/stats'
-import { summarize, useOccurrences } from '../lib/usePlanned'
+import { summarize, useForecast, useOccurrences } from '../lib/usePlanned'
 import { occStatus, type Occurrence } from '../lib/planned'
 import { OccurrenceRow } from '../components/OccurrenceRow'
 
@@ -39,21 +39,28 @@ export function Home({ month, setMonth, onOpen, onAdd, goTo, onOpenOcc, onPay, o
   const planExp = summarize(occ, 'expense')
   const planInc = summarize(occ, 'income')
   const hasPlanned = occ.length > 0
-  const forecastBalance = t.income + planInc.open - t.expense - planExp.open
   const openOcc = occ
     .filter((o) => ['overdue', 'today', 'upcoming'].includes(occStatus(o)))
     .sort((a, b) => Number(occStatus(b) === 'overdue') - Number(occStatus(a) === 'overdue') || a.due.getTime() - b.due.getTime())
   const overdue = openOcc.filter((o) => occStatus(o) === 'overdue').length
 
-  // Orçamento: o que já saiu + contas a pagar que ainda vão sair
-  const budget = profile?.monthly_budget ?? null
-  const pct = budget ? (t.expense / budget) * 100 : 0
-  const committedPct = budget ? Math.min(100 - Math.min(100, pct), (planExp.open / budget) * 100) : 0
-  const remaining = budget ? budget - t.expense - planExp.open : 0
-  const daysLeft = daysInMonth(month) - now.getDate() + 1
-  const perDay = remaining > 0 && isCurrent ? remaining / daysLeft : 0
+  const f = useForecast(month)
+  const lastDay = `${daysInMonth(month)}/${month.slice(5)}`
+  const signed = (n: number) => `${n < 0 ? '−' : '+'}${brl(Math.abs(n))}`
+  const heroValue = f.phase === 'future' ? f.willSpend : f.spent
+  const [reais, cents] = brl(heroValue).replace('R$', '').trim().split(',')
+  const breakdown = [
+    f.spent > 0 && `${brl0(f.spent)} já gastos`,
+    f.billsOpen > 0 && `${brl0(f.billsOpen)} em contas`,
+    f.variableAhead >= 1 && `${brl0(f.variableAhead)} no seu ritmo atual`,
+  ].filter(Boolean)
 
-  const [reais, cents] = brl(t.expense).replace('R$', '').trim().split(',')
+  // Limite opcional de gastos: compara com a previsão do mês
+  const budget = profile?.monthly_budget ?? null
+  const pct = budget ? (f.spent / budget) * 100 : 0
+  const committedPct = budget ? Math.min(100 - Math.min(100, pct), ((f.willSpend - f.spent) / budget) * 100) : 0
+  const projPct = budget ? (f.willSpend / budget) * 100 : 0
+
   const firstName = (profile?.name ?? '').split(' ')[0]
 
   return (
@@ -70,40 +77,62 @@ export function Home({ month, setMonth, onOpen, onAdd, goTo, onOpenOcc, onPay, o
       </div>
 
       <div className="hero">
-        <div className="label">Gastos em {monthLabel(month).toLowerCase()}</div>
+        <div className="label">
+          {f.phase === 'future' ? `Vou gastar em ${monthLabel(month).toLowerCase()}` : `Gastei em ${monthLabel(month).toLowerCase()}`}
+          {f.phase === 'current' && ' · até hoje'}
+        </div>
         <div className="big">
           <small>R$ </small>{reais}<small>,{cents}</small>
         </div>
         <div className="hero-row">
-          <div className="hero-pill">
-            <div className="k">Receitas</div>
-            <div className="v">{brl(t.income)}</div>
-          </div>
-          <div className="hero-pill">
-            <div className="k">Saldo</div>
-            <div className="v">{t.balance < 0 ? '−' : ''}{brl(Math.abs(t.balance))}</div>
+          {f.phase === 'past' ? (
+            <div className="hero-pill">
+              <div className="k">Recebi</div>
+              <div className="v">{brl(f.received)}</div>
+            </div>
+          ) : f.phase === 'future' ? (
+            <div className="hero-pill">
+              <div className="k">Vou receber</div>
+              <div className="v">{brl(f.willReceive)}</div>
+            </div>
+          ) : (
+            <div className="hero-pill">
+              <div className="k">Vou gastar</div>
+              <div className="v">{brl(f.willSpend)}</div>
+              <div className="sub">até {lastDay}</div>
+            </div>
+          )}
+          <div className={`hero-pill ${f.endBalance < 0 ? 'neg' : 'pos'}`}>
+            <div className="k">{f.phase === 'past' ? (f.endBalance < 0 ? 'Faltou' : 'Sobrou') : 'Fim do mês'}</div>
+            <div className="v">{signed(f.endBalance)}</div>
+            {f.phase !== 'past' && <div className="sub">{f.endBalance < 0 ? 'vai faltar' : 'vai sobrar'}</div>}
           </div>
         </div>
+
+        <div className="hero-notes">
+          {f.phase === 'current' && breakdown.length > 1 && <div>= {breakdown.join(' + ')}</div>}
+          {f.phase !== 'past' && (
+            <div>
+              Entrou {brl0(f.received)}
+              {f.incomeOpen > 0 ? ` · a receber ${brl0(f.incomeOpen)}` : ''}
+              {f.phase === 'current' ? ` · saldo hoje ${signed(f.balanceNow)}` : ''}
+            </div>
+          )}
+          {f.phase === 'future' && <div>Só com as contas e receitas previstas</div>}
+        </div>
+
         {budget ? (
           <div className="budget">
             <div className="budget-bar">
-              <i className={pct + committedPct >= 100 ? 'over' : pct + committedPct >= 80 ? 'warn' : ''} style={{ width: `${Math.min(100, pct)}%` }} />
+              <i className={projPct >= 100 ? 'over' : projPct >= 85 ? 'warn' : ''} style={{ width: `${Math.min(100, pct)}%` }} />
               {committedPct > 0 && <i className="committed" style={{ width: `${committedPct}%` }} />}
             </div>
             <div className="budget-txt">
-              <span>{pct.toFixed(0)}% de {brl0(budget)}{planExp.open > 0 ? ` · +${brl0(planExp.open)} em contas` : ''}</span>
-              <span>
-                {remaining >= 0
-                  ? `Restam ${brl0(remaining)}${perDay ? ` · ${brl0(perDay)}/dia` : ''}`
-                  : `Estourou ${brl0(-remaining)}`}
-              </span>
+              <span>Limite {brl0(budget)}</span>
+              <span>{projPct >= 100 ? `previsão estoura ${brl0(f.willSpend - budget)}` : `previsão usa ${projPct.toFixed(0)}%`}</span>
             </div>
           </div>
-        ) : (
-          <button className="budget-txt" style={{ marginTop: 12, position: 'relative', zIndex: 1 }} onClick={() => goTo('settings')}>
-            <span>🎯 Definir orçamento mensal →</span>
-          </button>
-        )}
+        ) : null}
       </div>
 
       <div className="strip">
@@ -137,9 +166,19 @@ export function Home({ month, setMonth, onOpen, onAdd, goTo, onOpenOcc, onPay, o
               </div>
             </div>
             <div>
-              <div className="k">Saldo previsto</div>
-              <div className={`v${forecastBalance < 0 ? ' up' : ''}`}>{forecastBalance < 0 ? '−' : ''}{brl(Math.abs(forecastBalance))}</div>
-              <div className="s">no fim do mês</div>
+              {planInc.total > 0 ? (
+                <>
+                  <div className="k">A receber</div>
+                  <div className="v" style={{ color: 'var(--green)' }}>{brl(planInc.open)}</div>
+                  <div className="s">{planInc.open ? `de ${brl0(planInc.total)} previstos` : 'Tudo recebido 🎉'}</div>
+                </>
+              ) : (
+                <>
+                  <div className="k">Já pago</div>
+                  <div className="v">{brl(planExp.paid)}</div>
+                  <div className="s">de {brl0(planExp.total)}</div>
+                </>
+              )}
             </div>
           </div>
           {openOcc.length > 0 && (
@@ -157,7 +196,7 @@ export function Home({ month, setMonth, onOpen, onAdd, goTo, onOpenOcc, onPay, o
         <button className="card plan-empty" onClick={onNewPlanned}>
           <span style={{ fontSize: 26 }}>🗓️</span>
           <span>
-            <b>Cadastre suas contas fixas</b>
+            <b>Cadastre contas fixas e seu salário</b>
             <br />
             Aluguel, internet, assinaturas e parcelas: veja quanto ainda vai sair no mês.
           </span>

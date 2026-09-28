@@ -8,6 +8,11 @@ export function statusText(o: Occurrence, today = new Date()) {
   const days = Math.round((o.due.getTime() - new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime()) / 86400000)
   if (st === 'paid') return { st, text: o.planned.kind === 'income' ? 'Recebido' : 'Pago' }
   if (st === 'skipped') return { st, text: 'Pulado' }
+  if (o.planned.kind === 'income') {
+    if (st === 'today') return { st, text: 'Cai hoje' }
+    if (st === 'overdue') return { st, text: days === -1 ? 'Era para ontem' : `Atrasado ${-days} dias` }
+    return { st, text: days === 1 ? 'Cai amanhã' : days <= 7 ? `Cai em ${days} dias` : `Cai dia ${day}` }
+  }
   if (st === 'today') return { st, text: 'Vence hoje' }
   if (st === 'overdue') return { st, text: days === -1 ? 'Venceu ontem' : `Venceu há ${-days} dias` }
   return { st, text: days === 1 ? 'Vence amanhã' : days <= 7 ? `Vence em ${days} dias` : `Vence dia ${day}` }
