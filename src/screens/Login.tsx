@@ -50,6 +50,7 @@ export function Login() {
         msg.includes('Email not confirmed') ? 'Confirme seu e-mail antes de entrar' :
         msg.includes('already registered') ? 'Esse e-mail já tem conta. Entre com sua senha.' :
         msg.includes('Password should') ? 'A senha precisa ter pelo menos 6 caracteres' :
+        msg.includes('email rate limit') ? 'O envio de e-mails do app está no limite agora. Tente de novo mais tarde.' :
         msg.includes('rate limit') || msg.includes('seconds') ? 'Muitas tentativas. Espere alguns minutos e tente de novo.' :
         msg.includes('sending') ? 'Não consegui enviar o e-mail agora. Tente mais tarde.' : msg,
       )
