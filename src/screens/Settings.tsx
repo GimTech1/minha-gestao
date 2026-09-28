@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useStore, type Category, type Kind } from '../lib/store'
 import { supabase, INGEST_URL } from '../lib/supabase'
 import { Sheet } from '../components/Sheet'
 import { IconNext, IconX } from '../components/icons'
+import { PasswordFields } from '../components/PasswordFields'
 import { brl } from '../lib/format'
 
 const EMOJIS = ['🍔', '🛒', '🚗', '🏠', '💊', '🎉', '🛍️', '💸', '☕', '🍺', '⛽', '✈️', '🎓', '🐶', '👶', '💇', '🎮', '📱', '💡', '🧾', '🏋️', '🎁', '💰', '📥', '📈', '🏦', '💼', '🧑‍💻', '🍕', '🚌', '🏥', '📦']
@@ -214,11 +215,16 @@ function AutomationGuide({ onClose, notify }: { onClose: () => void; notify: (m:
 
 export function Settings({ notify }: { notify: (m: string) => void }) {
   const { profile, categories, txs, catById, updateProfile } = useStore()
+  const [session, setSession] = useState<{ user: { email?: string } } | null>(null)
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setSession(data.session))
+  }, [])
   const [name, setName] = useState(profile?.name ?? '')
   const [budget, setBudget] = useState(profile?.monthly_budget ? String(profile.monthly_budget).replace('.', ',') : '')
   const [editing, setEditing] = useState<{ cat: Category | null; kind: Kind } | null>(null)
   const [guide, setGuide] = useState(false)
   const [catKind, setCatKind] = useState<Kind>('expense')
+  const [passSheet, setPassSheet] = useState(false)
 
   const saveProfile = async () => {
     const b = budget.trim() ? Number(budget.replace(/\./g, '').replace(',', '.')) : null
@@ -229,14 +235,6 @@ export function Settings({ notify }: { notify: (m: string) => void }) {
     } catch (e) {
       notify(`Erro: ${(e as Error).message}`)
     }
-  }
-
-  const changePassword = async () => {
-    const password = prompt('Nova senha (mínimo 6 caracteres):')
-    if (!password) return
-    if (password.length < 6) return notify('A senha precisa ter pelo menos 6 caracteres')
-    const { error } = await supabase.auth.updateUser({ password })
-    notify(error ? `Erro: ${error.message}` : 'Senha alterada')
   }
 
   const exportCsv = () => {
@@ -324,9 +322,13 @@ export function Settings({ notify }: { notify: (m: string) => void }) {
             <div className="s">{txs.length} lançamentos</div>
           </div>
         </button>
-        <button className="row" onClick={changePassword}>
+        <button className="row" onClick={() => setPassSheet(true)}>
           <span style={{ fontSize: 22 }}>🔑</span>
-          <div className="grow"><div className="t">Alterar senha</div></div>
+          <div className="grow">
+            <div className="t">Trocar senha</div>
+            <div className="s">{session?.user.email}</div>
+          </div>
+          <span className="chev"><IconNext /></span>
         </button>
         <button className="row danger" onClick={() => confirm('Sair da conta?') && supabase.auth.signOut()}>
           <span style={{ fontSize: 22 }}>🚪</span>
@@ -337,6 +339,21 @@ export function Settings({ notify }: { notify: (m: string) => void }) {
 
       {editing && <CategoryEditor cat={editing.cat} kind={editing.kind} onClose={() => setEditing(null)} notify={notify} />}
       {guide && <AutomationGuide onClose={() => setGuide(false)} notify={notify} />}
+      {passSheet && (
+        <Sheet onClose={() => setPassSheet(false)}>
+          <div className="sheet-h">
+            <button className="icon-btn" onClick={() => setPassSheet(false)} aria-label="Fechar"><IconX /></button>
+            <h3>Trocar senha</h3>
+            <span style={{ width: 36 }} />
+          </div>
+          <PasswordFields
+            onDone={() => {
+              setPassSheet(false)
+              notify('Senha alterada ✓')
+            }}
+          />
+        </Sheet>
+      )}
     </div>
   )
 }

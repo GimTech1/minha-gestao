@@ -5,10 +5,25 @@ import { TxList } from '../components/TxList'
 import { IconSearch, IconX } from '../components/icons'
 import { brl } from '../lib/format'
 import { monthTxs, totals } from '../lib/stats'
+import { PlannedList } from '../components/PlannedList'
+import type { Occurrence } from '../lib/planned'
 
 const norm = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase()
 
-export function History({ month, setMonth, onOpen }: { month: string; setMonth: (m: string) => void; onOpen: (t: Tx) => void }) {
+export type ListView = 'txs' | 'planned'
+
+interface Props {
+  month: string
+  setMonth: (m: string) => void
+  onOpen: (t: Tx) => void
+  view: ListView
+  setView: (v: ListView) => void
+  onOpenOcc: (o: Occurrence) => void
+  onPay: (o: Occurrence) => void
+  onNewPlanned: () => void
+}
+
+export function History({ month, setMonth, onOpen, view, setView, onOpenOcc, onPay, onNewPlanned }: Props) {
   const { txs, categories, catById } = useStore()
   const [q, setQ] = useState('')
   const [filter, setFilter] = useState<string>('all') // all | expense | income | <categoryId>
@@ -37,9 +52,19 @@ export function History({ month, setMonth, onOpen }: { month: string; setMonth: 
   return (
     <div className="screen">
       <div className="topbar">
-        <h1>Extrato</h1>
-        {!q && <MonthSwitch month={month} setMonth={setMonth} />}
+        <h1>{view === 'txs' ? 'Extrato' : 'Previstos'}</h1>
+        {(!q || view === 'planned') && <MonthSwitch month={month} setMonth={setMonth} allowFuture={view === 'planned'} />}
       </div>
+
+      <div className="seg" style={{ marginBottom: 12 }}>
+        <button className={view === 'txs' ? 'on' : ''} onClick={() => setView('txs')}>Lançamentos</button>
+        <button className={view === 'planned' ? 'on' : ''} onClick={() => setView('planned')}>Previstos</button>
+      </div>
+
+      {view === 'planned' ? (
+        <PlannedList month={month} onOpen={onOpenOcc} onPay={onPay} onNew={onNewPlanned} />
+      ) : (
+      <>
 
       <div className="search">
         <IconSearch />
@@ -76,6 +101,8 @@ export function History({ month, setMonth, onOpen }: { month: string; setMonth: 
           <span className="e">🔎</span>
           Nada por aqui.
         </div>
+      )}
+      </>
       )}
     </div>
   )

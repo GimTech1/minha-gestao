@@ -4,6 +4,7 @@ import { IconClip, IconDel, IconTrash, IconX } from './icons'
 import { useStore, type Kind, type Tx } from '../lib/store'
 import { parseBankText, guessCategory } from '../lib/parser'
 import { METHODS, dayKey, haptic, toDateInput } from '../lib/format'
+import { findMatch, monthStart, paidIndex } from '../lib/planned'
 
 const norm = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().trim()
 
@@ -15,7 +16,7 @@ interface Props {
 }
 
 export function AddSheet({ editing, onClose, onSaved, onDeleted }: Props) {
-  const { categories, txs, saveTx, deleteTx } = useStore()
+  const { categories, txs, planned, saveTx, deleteTx, savePlanned } = useStore()
 
   const [kind, setKind] = useState<Kind>(editing?.kind ?? 'expense')
   const [cents, setCents] = useState(editing ? Math.round(editing.amount * 100) : 0)
@@ -26,6 +27,7 @@ export function AddSheet({ editing, onClose, onSaved, onDeleted }: Props) {
   const [day, setDay] = useState(editing ? dayKey(new Date(editing.occurred_at)) : dayKey(new Date()))
   const [descFocus, setDescFocus] = useState(false)
   const [note, setNote] = useState('')
+  const [fixed, setFixed] = useState(false)
   const holdTimer = useRef<number | undefined>(undefined)
 
   // Categorias mais usadas primeiro (últimos 90 dias)
@@ -126,7 +128,7 @@ export function AddSheet({ editing, onClose, onSaved, onDeleted }: Props) {
     }
   }
 
-  const submit = () => {
+  const submit = async () => {
     if (!cents) return
     const today = dayKey(new Date())
     let occurred: Date
@@ -147,6 +149,40 @@ export function AddSheet({ editing, onClose, onSaved, onDeleted }: Props) {
       occurred_at: occurred.toISOString(),
       source: editing?.source ?? 'manual',
       created_at: editing?.created_at,
+      planned_id: editing?.planned_id ?? null,
+      planned_month: editing?.planned_month ?? null,
+    }
+    const month = dayKey(occurred).slice(0, 7)
+    if (!editing && fixed) {
+      // Vira conta prevista todo mês, e este lançamento já paga o mês atual
+      const planId = crypto.randomUUID()
+      try {
+        await savePlanned({
+          id: planId,
+          kind,
+          amount: tx.amount,
+          description: tx.description ?? cats.find((c) => c.id === tx.category_id)?.name ?? 'Conta fixa',
+          category_id: tx.category_id,
+          method,
+          type: 'monthly',
+          day: occurred.getDate(),
+          start_month: monthStart(month),
+          installments: null,
+          end_month: null,
+          skipped_months: [],
+        })
+        tx.planned_id = planId
+        tx.planned_month = monthStart(month)
+      } catch {
+        setNote('Sem conexão para criar a conta fixa; salvei só o lançamento')
+      }
+    } else if (!editing) {
+      // Se bate com uma conta prevista em aberto, já dá baixa nela
+      const m = findMatch(planned, paidIndex(txs), kind, tx.amount, tx.description ?? '', occurred)
+      if (m) {
+        tx.planned_id = m.planned.id
+        tx.planned_month = monthStart(m.month)
+      }
     }
     haptic(20)
     saveTx(tx)
@@ -230,6 +266,9 @@ export function AddSheet({ editing, onClose, onSaved, onDeleted }: Props) {
           📅 {customDay ? day.split('-').reverse().slice(0, 2).join('/') : 'Data'}
           <input type="date" value={day} max={toDateInput(new Date())} onChange={(e) => e.target.value && setDay(e.target.value)} />
         </label>
+        {!editing && (
+          <button className={`chip${fixed ? ' on' : ''}`} onClick={() => setFixed(!fixed)}>🔁 Todo mês</button>
+        )}
         <span style={{ width: 1, background: 'var(--line)', flex: 'none' }} />
         {METHODS.map((m) => (
           <button key={m.id} className={`chip${method === m.id ? ' on' : ''}`} onClick={() => setMethod(method === m.id ? null : m.id)}>

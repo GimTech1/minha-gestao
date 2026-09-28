@@ -4,16 +4,22 @@ import { MonthSwitch } from '../components/MonthSwitch'
 import { TxList } from '../components/TxList'
 import { brl, brl0, daysInMonth, greeting, monthKey, monthLabel, shiftMonth } from '../lib/format'
 import { byCategory, monthTxs, spentSince, startOfWeek, totals } from '../lib/stats'
+import { summarize, useOccurrences } from '../lib/usePlanned'
+import { occStatus, type Occurrence } from '../lib/planned'
+import { OccurrenceRow } from '../components/OccurrenceRow'
 
 interface Props {
   month: string
   setMonth: (m: string) => void
   onOpen: (t: Tx) => void
   onAdd: () => void
-  goTo: (tab: 'list' | 'insights' | 'settings') => void
+  goTo: (tab: 'list' | 'insights' | 'settings', view?: 'txs' | 'planned') => void
+  onOpenOcc: (o: Occurrence) => void
+  onPay: (o: Occurrence) => void
+  onNewPlanned: () => void
 }
 
-export function Home({ month, setMonth, onOpen, onAdd, goTo }: Props) {
+export function Home({ month, setMonth, onOpen, onAdd, goTo, onOpenOcc, onPay, onNewPlanned }: Props) {
   const { txs, profile, catById, syncing, pending } = useStore()
 
   const mTxs = useMemo(() => monthTxs(txs, month), [txs, month])
@@ -29,9 +35,21 @@ export function Home({ month, setMonth, onOpen, onAdd, goTo }: Props) {
   const daysElapsed = isCurrent ? now.getDate() : daysInMonth(month)
   const avg = t.expense / Math.max(1, daysElapsed)
 
+  const occ = useOccurrences(month)
+  const planExp = summarize(occ, 'expense')
+  const planInc = summarize(occ, 'income')
+  const hasPlanned = occ.length > 0
+  const forecastBalance = t.income + planInc.open - t.expense - planExp.open
+  const openOcc = occ
+    .filter((o) => ['overdue', 'today', 'upcoming'].includes(occStatus(o)))
+    .sort((a, b) => Number(occStatus(b) === 'overdue') - Number(occStatus(a) === 'overdue') || a.due.getTime() - b.due.getTime())
+  const overdue = openOcc.filter((o) => occStatus(o) === 'overdue').length
+
+  // Orçamento: o que já saiu + contas a pagar que ainda vão sair
   const budget = profile?.monthly_budget ?? null
   const pct = budget ? (t.expense / budget) * 100 : 0
-  const remaining = budget ? budget - t.expense : 0
+  const committedPct = budget ? Math.min(100 - Math.min(100, pct), (planExp.open / budget) * 100) : 0
+  const remaining = budget ? budget - t.expense - planExp.open : 0
   const daysLeft = daysInMonth(month) - now.getDate() + 1
   const perDay = remaining > 0 && isCurrent ? remaining / daysLeft : 0
 
@@ -69,10 +87,11 @@ export function Home({ month, setMonth, onOpen, onAdd, goTo }: Props) {
         {budget ? (
           <div className="budget">
             <div className="budget-bar">
-              <i className={pct >= 100 ? 'over' : pct >= 80 ? 'warn' : ''} style={{ width: `${Math.min(100, pct)}%` }} />
+              <i className={pct + committedPct >= 100 ? 'over' : pct + committedPct >= 80 ? 'warn' : ''} style={{ width: `${Math.min(100, pct)}%` }} />
+              {committedPct > 0 && <i className="committed" style={{ width: `${committedPct}%` }} />}
             </div>
             <div className="budget-txt">
-              <span>{pct.toFixed(0)}% de {brl0(budget)}</span>
+              <span>{pct.toFixed(0)}% de {brl0(budget)}{planExp.open > 0 ? ` · +${brl0(planExp.open)} em contas` : ''}</span>
               <span>
                 {remaining >= 0
                   ? `Restam ${brl0(remaining)}${perDay ? ` · ${brl0(perDay)}/dia` : ''}`
@@ -101,6 +120,49 @@ export function Home({ month, setMonth, onOpen, onAdd, goTo }: Props) {
           <div className="v">{brl0(avg)}</div>
         </div>
       </div>
+
+      <div className="section-h">
+        <h2>Contas previstas</h2>
+        <button onClick={() => goTo('list', 'planned')}>{hasPlanned ? 'Ver todas' : ''}</button>
+      </div>
+      {hasPlanned ? (
+        <div className="card plan-card">
+          <div className="plan-top">
+            <div>
+              <div className="k">Falta pagar</div>
+              <div className="v">{brl(planExp.open)}</div>
+              <div className="s">
+                {planExp.openCount ? `${planExp.openCount} ${planExp.openCount === 1 ? 'conta' : 'contas'}` : 'Tudo pago 🎉'}
+                {overdue > 0 && <span className="up"> · {overdue} atrasada{overdue > 1 ? 's' : ''}</span>}
+              </div>
+            </div>
+            <div>
+              <div className="k">Saldo previsto</div>
+              <div className={`v${forecastBalance < 0 ? ' up' : ''}`}>{forecastBalance < 0 ? '−' : ''}{brl(Math.abs(forecastBalance))}</div>
+              <div className="s">no fim do mês</div>
+            </div>
+          </div>
+          {openOcc.length > 0 && (
+            <div className="plan-list">
+              {openOcc.slice(0, 4).map((o) => (
+                <OccurrenceRow key={`${o.planned.id}-${o.month}`} o={o} onOpen={onOpenOcc} onPay={onPay} />
+              ))}
+              {openOcc.length > 4 && (
+                <button className="more" onClick={() => goTo('list', 'planned')}>+ {openOcc.length - 4} contas</button>
+              )}
+            </div>
+          )}
+        </div>
+      ) : (
+        <button className="card plan-empty" onClick={onNewPlanned}>
+          <span style={{ fontSize: 26 }}>🗓️</span>
+          <span>
+            <b>Cadastre suas contas fixas</b>
+            <br />
+            Aluguel, internet, assinaturas e parcelas: veja quanto ainda vai sair no mês.
+          </span>
+        </button>
+      )}
 
       {cats.length > 0 && (
         <>

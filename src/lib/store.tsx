@@ -2,6 +2,7 @@
 // grava de forma otimista e guarda uma fila offline quando a rede falha.
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { supabase } from './supabase'
+import type { Planned } from './planned'
 
 export type Kind = 'expense' | 'income'
 
@@ -25,6 +26,8 @@ export interface Tx {
   occurred_at: string
   source: 'manual' | 'auto'
   created_at?: string
+  planned_id?: string | null
+  planned_month?: string | null
 }
 
 export interface Profile {
@@ -43,6 +46,7 @@ interface Store {
   profile: Profile | null
   categories: Category[]
   txs: Tx[]
+  planned: Planned[]
   catById: Map<string, Category>
   saveTx: (tx: Tx) => void
   deleteTx: (id: string) => void
@@ -50,13 +54,17 @@ interface Store {
   deleteCategory: (id: string) => Promise<void>
   updateProfile: (p: Partial<Profile>) => Promise<void>
   rotateToken: () => Promise<void>
+  savePlanned: (p: Planned) => Promise<void>
+  deletePlanned: (id: string) => Promise<void>
   refresh: () => Promise<void>
 }
 
 const Ctx = createContext<Store | null>(null)
 export const useStore = () => useContext(Ctx)!
 
-const TX_COLS = 'id, kind, amount, category_id, description, method, occurred_at, source, created_at'
+const TX_COLS = 'id, kind, amount, category_id, description, method, occurred_at, source, created_at, planned_id, planned_month'
+const PLAN_COLS = 'id, kind, amount, description, category_id, method, type, day, start_month, installments, end_month, skipped_months'
+const toPlanned = (r: Record<string, unknown>): Planned => ({ ...(r as unknown as Planned), amount: Number(r.amount) })
 const sortTx = (a: Tx, b: Tx) => b.occurred_at.localeCompare(a.occurred_at)
 const toTx = (r: Record<string, unknown>): Tx => ({ ...(r as unknown as Tx), amount: Number(r.amount) })
 
@@ -80,21 +88,22 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
   const cacheKey = `mg-cache-v1-${userId}`
   const queueKey = `mg-queue-v1-${userId}`
   const cached = useMemo(
-    () => load<{ profile: Profile | null; categories: Category[]; txs: Tx[] } | null>(cacheKey, null),
+    () => load<{ profile: Profile | null; categories: Category[]; txs: Tx[]; planned?: Planned[] } | null>(cacheKey, null),
     [cacheKey],
   )
 
   const [profile, setProfile] = useState<Profile | null>(cached?.profile ?? null)
   const [categories, setCategories] = useState<Category[]>(cached?.categories ?? [])
   const [txs, setTxs] = useState<Tx[]>(cached?.txs ?? [])
+  const [planned, setPlanned] = useState<Planned[]>(cached?.planned ?? [])
   const [ready, setReady] = useState(!!cached)
   const [syncing, setSyncing] = useState(false)
   const [queue, setQueue] = useState<PendingOp[]>(() => load(queueKey, []))
   const flushing = useRef(false)
 
   useEffect(() => {
-    if (ready) save(cacheKey, { profile, categories, txs })
-  }, [ready, profile, categories, txs, cacheKey])
+    if (ready) save(cacheKey, { profile, categories, txs, planned })
+  }, [ready, profile, categories, txs, planned, cacheKey])
   useEffect(() => {
     save(queueKey, queue)
   }, [queue, queueKey])
@@ -102,11 +111,13 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
   const refresh = useCallback(async () => {
     setSyncing(true)
     try {
-      const [p, c, t] = await Promise.all([
+      const [p, c, t, pl] = await Promise.all([
         supabase.from('profiles').select('id, name, monthly_budget, ingest_token').eq('id', userId).maybeSingle(),
         supabase.from('categories').select('id, name, emoji, color, kind, keywords, sort').order('sort'),
         supabase.from('transactions').select(TX_COLS).order('occurred_at', { ascending: false }).range(0, 9999),
+        supabase.from('planned').select(PLAN_COLS).order('created_at'),
       ])
+      if (pl.data) setPlanned(pl.data.map(toPlanned))
       if (p.data) setProfile({ ...p.data, monthly_budget: p.data.monthly_budget == null ? null : Number(p.data.monthly_budget) })
       if (c.data) setCategories(c.data as Category[])
       if (t.data) {
@@ -141,6 +152,8 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
                 method: op.row.method,
                 occurred_at: op.row.occurred_at,
                 source: op.row.source,
+                planned_id: op.row.planned_id ?? null,
+                planned_month: op.row.planned_month ?? null,
               })
             : await supabase.from('transactions').delete().eq('id', op.id)
         // Erro de rede: tenta de novo depois. Erro do banco: descarta para não travar a fila.
@@ -184,6 +197,15 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
         } else {
           const row = toTx(payload.new)
           setTxs((prev) => [row, ...prev.filter((t) => t.id !== row.id)].sort(sortTx))
+        }
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'planned', filter: `user_id=eq.${userId}` }, (payload) => {
+        if (payload.eventType === 'DELETE') {
+          const id = (payload.old as { id: string }).id
+          setPlanned((prev) => prev.filter((p) => p.id !== id))
+        } else {
+          const row = toPlanned(payload.new)
+          setPlanned((prev) => [...prev.filter((p) => p.id !== row.id), row])
         }
       })
       .subscribe()
@@ -240,6 +262,19 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
     setProfile((prev) => (prev ? { ...prev, ingest_token: data as string } : prev))
   }, [])
 
+  const savePlanned = useCallback(async (p: Planned) => {
+    setPlanned((prev) => [...prev.filter((x) => x.id !== p.id), p])
+    const { error } = await supabase.from('planned').upsert(p)
+    if (error) throw error
+  }, [])
+
+  const deletePlanned = useCallback(async (id: string) => {
+    setPlanned((prev) => prev.filter((p) => p.id !== id))
+    setTxs((prev) => prev.map((t) => (t.planned_id === id ? { ...t, planned_id: null, planned_month: null } : t)))
+    const { error } = await supabase.from('planned').delete().eq('id', id)
+    if (error) throw error
+  }, [])
+
   const catById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories])
 
   const value: Store = {
@@ -249,6 +284,7 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
     profile,
     categories,
     txs,
+    planned,
     catById,
     saveTx,
     deleteTx,
@@ -256,6 +292,8 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
     deleteCategory,
     updateProfile,
     rotateToken,
+    savePlanned,
+    deletePlanned,
     refresh,
   }
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>

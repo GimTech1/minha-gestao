@@ -37,6 +37,7 @@ export function TxList({ txs, onOpen, limitDays }: { txs: Tx[]; onOpen: (t: Tx) 
                   <span className="mid">
                     <div className="title">{t.description || c?.name || (t.kind === 'income' ? 'Receita' : 'Gasto')}</div>
                     <div className="meta">
+                      {t.planned_id && <span className="badge fixo">PREVISTO</span>}
                       {t.source === 'auto' && <span className="badge">AUTO</span>}
                       <span>{meta}</span>
                     </div>

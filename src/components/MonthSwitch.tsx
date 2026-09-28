@@ -1,8 +1,8 @@
 import { IconBack, IconNext } from './icons'
 import { monthKey, monthLabel, shiftMonth } from '../lib/format'
 
-export function MonthSwitch({ month, setMonth }: { month: string; setMonth: (m: string) => void }) {
-  const isCurrent = month === monthKey(new Date())
+export function MonthSwitch({ month, setMonth, allowFuture }: { month: string; setMonth: (m: string) => void; allowFuture?: boolean }) {
+  const isCurrent = !allowFuture && month >= monthKey(new Date())
   return (
     <div className="month-switch">
       <button onClick={() => setMonth(shiftMonth(month, -1))} aria-label="Mês anterior"><IconBack /></button>

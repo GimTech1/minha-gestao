@@ -307,3 +307,60 @@ textarea.input { height: auto; min-height: 90px; padding: 12px 14px; resize: ver
 /* cards dentro de painéis precisam de um degrau acima do fundo do painel */
 .sheet .card { background: var(--surface-2); }
 .sheet .card .code, .sheet .code { background: var(--surface-3); }
+
+/* ---------- contas previstas ---------- */
+.budget-bar { display: flex; }
+.budget-bar i.committed { background: repeating-linear-gradient(135deg, rgba(198, 255, 77, 0.55) 0 4px, rgba(198, 255, 77, 0.25) 4px 8px); border-radius: 0 99px 99px 0; }
+.plan-card { padding: 0; overflow: hidden; }
+.plan-top { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 16px; }
+.plan-top .k { font-size: 11px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+.plan-top .v { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; margin-top: 3px; }
+.plan-top .s { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.plan-list { border-top: 1px solid var(--line); }
+.plan-list .more { width: 100%; padding: 12px; color: var(--accent); font-weight: 600; font-size: 14px; border-top: 1px solid var(--line); }
+.plan-empty { display: flex; gap: 14px; align-items: center; text-align: left; width: 100%; font-size: 13px; line-height: 1.45; color: var(--text-2); border: 1px dashed rgba(139, 108, 255, 0.4); }
+.plan-empty b { color: var(--text); font-size: 15px; }
+.tx.occ { cursor: pointer; }
+.tx .st { font-weight: 600; }
+.st.overdue { color: var(--red); }
+.st.today { color: #ffb020; }
+.st.paid { color: var(--green); }
+.st.skipped { color: var(--muted); }
+.tx .amt.done { color: var(--muted); text-decoration: line-through; text-decoration-color: rgba(255, 255, 255, 0.25); }
+.tx.occ.paid .amt.done { text-decoration: none; }
+.check {
+  width: 30px; height: 30px; border-radius: 50%; flex: none; display: grid; place-items: center;
+  border: 2px solid var(--surface-3); color: transparent; margin-left: 2px;
+}
+.check svg { width: 16px; height: 16px; }
+.tx.occ.overdue .check { border-color: rgba(255, 107, 107, 0.6); }
+.check:active { background: var(--surface-3); color: var(--text-2); }
+.check.on { background: var(--green); border-color: var(--green); color: #04210f; }
+.add-planned { width: 100%; margin-top: 12px; height: 46px; font-size: 15px; color: var(--accent); }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+select.input { -webkit-appearance: none; appearance: none; }
+.big-input { font-size: 24px !important; font-weight: 700; text-align: center; height: 58px; }
+.occ-head { text-align: center; margin: 4px 0 16px; }
+.occ-head .ico { width: 56px; height: 56px; border-radius: 18px; display: inline-grid; place-items: center; font-size: 28px; }
+.occ-head .t { font-size: 20px; font-weight: 750; margin-top: 8px; }
+.occ-head .s { font-size: 13px; color: var(--muted); margin-top: 4px; }
+.badge.fixo { background: rgba(61, 220, 132, 0.15); color: #7fe8b0; }
+
+/* ---------- senha ---------- */
+.pass-wrap { position: relative; }
+.pass-wrap .input { padding-right: 84px; }
+.pass-eye { position: absolute; right: 6px; top: 7px; height: 36px; padding: 0 12px; border-radius: 11px; font-size: 13px; font-weight: 600; color: var(--accent); }
+.hint { font-size: 13px; color: var(--muted); margin: -4px 4px 10px; }
+.hint.err { color: var(--red); }
+.login .forgot { align-self: flex-end; margin: -6px 0 6px; font-size: 14px; }
+
+/* linhas de extrato e contas: meta numa linha só */
+.tx .meta { white-space: nowrap; overflow: hidden; }
+.tx .meta span:last-child { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.tx .meta .badge, .tx .meta .st { flex: none; }
+.tx.occ .meta span:last-child.st { overflow: visible; }
+.toggle-row { display: flex; gap: 12px; align-items: center; width: 100%; text-align: left; background: var(--surface-2); border-radius: 15px; padding: 12px 14px; margin-bottom: 12px; font-size: 14px; line-height: 1.4; }
+.toggle-row .box { width: 24px; height: 24px; border-radius: 8px; border: 2px solid var(--surface-3); display: grid; place-items: center; flex: none; font-weight: 800; font-size: 14px; }
+.toggle-row.on .box { background: var(--green); border-color: var(--green); color: #04210f; }
+.toggle-row .muted { font-size: 12px; }
+.login .btn { flex: none; width: 100%; }

@@ -2,6 +2,11 @@
 // Autenticação pelo token pessoal do perfil (profiles.ingest_token), não por JWT.
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import { parseBankText, parseMoney, guessCategory, cleanMerchant } from './parser.ts'
+import { findMatch, paidIndex, monthOf, monthStart, addMonths, type Planned } from './planned.ts'
+
+// A função roda em UTC; datas "de parede" do Brasil (sem horário de verão desde 2019) ficam 3h deslocadas
+const BRT_OFFSET = 3 * 3600000
+const brtNow = () => new Date(Date.now() - BRT_OFFSET)
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -61,7 +66,7 @@ Deno.serve(async (req) => {
   const amount = body.amount != null && String(body.amount).trim() !== '' ? parseMoney(String(body.amount)) : parsed.amount
   if (!amount) return json({ ok: false, message: 'Não encontrei o valor no texto', text }, 422)
 
-  const kind = body.kind === 'income' || body.kind === 'expense' ? body.kind : parsed.kind
+  const kind = (body.kind === 'income' || body.kind === 'expense' ? body.kind : parsed.kind) as 'expense' | 'income'
   const description = merchant || parsed.description || null
   let method = parsed.method
   if (merchant && !method) method = /d[eé]bito/i.test(card) ? 'debito' : 'credito'
@@ -88,7 +93,32 @@ Deno.serve(async (req) => {
   }
   if (!category) category = cats.find((c) => c.kind === kind && /outros|entradas/i.test(c.name)) ?? null
 
-  const occurredAt = parsed.date && Math.abs(parsed.date.getTime() - Date.now()) < 40 * 86400000 ? parsed.date : new Date()
+  // Dá baixa na conta prevista correspondente (mesmo valor + nome parecido ou vencimento próximo)
+  const today = brtNow()
+  const [{ data: plans }, { data: paidRows }] = await Promise.all([
+    db
+      .from('planned')
+      .select('id, kind, amount, description, category_id, method, type, day, start_month, installments, end_month, skipped_months')
+      .eq('user_id', userId),
+    db
+      .from('transactions')
+      .select('id, planned_id, planned_month, amount')
+      .eq('user_id', userId)
+      .not('planned_id', 'is', null)
+      .gte('planned_month', monthStart(addMonths(monthOf(today), -1))),
+  ])
+  const match = findMatch(
+    (plans ?? []).map((p) => ({ ...p, amount: Number(p.amount) }) as Planned),
+    paidIndex((paidRows ?? []).map((r) => ({ ...r, amount: Number(r.amount) }))),
+    kind,
+    amount,
+    `${description ?? ''} ${text}`,
+    today,
+  )
+  if (match?.planned.category_id) category = cats.find((c) => c.id === match.planned.category_id) ?? category
+
+  const parsedDate = parsed.date ? new Date(parsed.date.getTime() + BRT_OFFSET) : null
+  const occurredAt = parsedDate && Math.abs(parsedDate.getTime() - Date.now()) < 40 * 86400000 ? parsedDate : new Date()
   const raw = text || `${amount}|${merchant}|${card}`
   const rawHash = await sha256(`${raw}|${new Date().toISOString().slice(0, 16)}`)
 
@@ -105,6 +135,8 @@ Deno.serve(async (req) => {
       source: 'auto',
       raw_text: raw.slice(0, 1000),
       raw_hash: rawHash,
+      planned_id: match?.planned.id ?? null,
+      planned_month: match ? monthStart(match.month) : null,
     })
     .select('id')
     .single()
@@ -122,6 +154,9 @@ Deno.serve(async (req) => {
     kind,
     description,
     category: category?.name ?? null,
-    message: `${category?.emoji ?? '✅'} ${sign}${brl(amount)}${description ? ' · ' + description : ''}${category ? ' (' + category.name + ')' : ''}`,
+    planned: match ? match.label : null,
+    message:
+      `${category?.emoji ?? '✅'} ${sign}${brl(amount)}${description ? ' · ' + description : ''}${category ? ' (' + category.name + ')' : ''}` +
+      (match ? ` · ✓ ${match.label} ${kind === 'income' ? 'recebida' : 'paga'}` : ''),
   })
 })
