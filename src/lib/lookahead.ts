@@ -25,6 +25,8 @@ export interface Lookahead {
   // Mantendo a média diária atual: primeira data em que a conta fica negativa
   firstNegative: { date: Date; balance: number } | null
   horizonEnd: Date
+  // Saldo previsto em conta em cada data, mantendo a média diária (para o gráfico)
+  path: Array<{ date: Date; balance: number }>
 }
 
 const DAY = 86400000
@@ -62,6 +64,7 @@ export function computeLookahead(input: {
   let goals = 0
   let i = 0
   let firstNegative: Lookahead['firstNegative'] = null
+  const path: Lookahead['path'] = [{ date: today, balance: input.cash }]
   for (const date of sorted) {
     while (i < events.length && events[i].date.getTime() <= date.getTime()) {
       const e = events[i++]
@@ -74,6 +77,7 @@ export function computeLookahead(input: {
     const available = base + acc
     checkpoints.push({ date, days, available, perDay: available / days, inflow, outflow, goals })
     const withPace = available - input.pace * days
+    path.push({ date, balance: available - input.spentToday - input.pace * (days - 1) })
     if (!firstNegative && withPace < 0) firstNegative = { date, balance: withPace }
   }
 
@@ -84,5 +88,6 @@ export function computeLookahead(input: {
     checkpoints,
     firstNegative,
     horizonEnd: sorted[sorted.length - 1] ?? today,
+    path,
   }
 }

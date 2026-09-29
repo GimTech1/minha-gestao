@@ -29,3 +29,17 @@ export const IconSearch = () => <svg viewBox="0 0 24 24" {...base}><circle cx="1
 export const IconClip = () => (
   <svg viewBox="0 0 24 24" {...base}><rect x="8" y="3" width="8" height="4" rx="1" /><path d="M16 5h2a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2" /></svg>
 )
+export const IconWallet = () => (
+  <svg viewBox="0 0 24 24" {...base}><path d="M19 7V5a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-4a2 2 0 0 0 0 4h4v2a1 1 0 0 1-1 1H5a2 2 0 0 1-2-2V6" /><path d="M21 13v4" /></svg>
+)
+export const IconDown = () => <svg viewBox="0 0 24 24" {...base}><path d="M12 5v14M5 12l7 7 7-7" /></svg>
+export const IconTrend = () => <svg viewBox="0 0 24 24" {...base}><path d="M3 17l6-6 4 4 8-8M15 7h6v6" /></svg>
+export const IconCheck = () => <svg viewBox="0 0 24 24" {...base} strokeWidth={2.6}><path d="M5 12.5 10 17 19 7" /></svg>
+export const IconAlert = () => <svg viewBox="0 0 24 24" {...base} strokeWidth={2.4}><path d="M12 8v5M12 16.5h.01" /><circle cx="12" cy="12" r="9" /></svg>
+export const IconInfo = () => <svg viewBox="0 0 24 24" {...base}><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" /></svg>
+export const IconCalendar = () => (
+  <svg viewBox="0 0 24 24" {...base}><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M16 3v4M8 3v4M3 10h18" /></svg>
+)
+export const IconTarget = () => (
+  <svg viewBox="0 0 24 24" {...base}><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5" /><circle cx="12" cy="12" r="1" /></svg>
+)

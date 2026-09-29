@@ -37,6 +37,7 @@ export interface Allowance {
   binding?: Checkpoint // data que limita o gasto diário
   firstNegative?: { date: Date; balance: number } | null // mantendo a média diária
   horizonEnd?: Date
+  path?: Array<{ date: Date; balance: number }>
 }
 
 export function computeAllowance(i: AllowanceInput): Allowance {

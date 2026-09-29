@@ -48,7 +48,13 @@ export interface Forecast {
   allowance: Allowance
   goal: number
   // Cenário com os valores possíveis (não garantidos) dos próximos 6 meses
-  possible: { inflow: number; outflow: number; perDay: number | null; firstNegative: { date: Date; balance: number } | null } | null
+  possible: {
+    inflow: number
+    outflow: number
+    perDay: number | null
+    firstNegative: { date: Date; balance: number } | null
+    path: Array<{ date: Date; balance: number }>
+  } | null
   accountBalance: number | null // saldo em conta agora (informado + lançamentos depois)
 }
 
@@ -153,6 +159,7 @@ export function useForecast(month: string): Forecast {
           outflow: possibleEvents.filter((e) => e.amount < 0).reduce((s, e) => s - e.amount, 0),
           perDay: withPossible.perDay,
           firstNegative: withPossible.firstNegative,
+          path: withPossible.path,
         }
       }
       const perDay = look.perDay
@@ -168,6 +175,7 @@ export function useForecast(month: string): Forecast {
         binding: look.binding,
         firstNegative: look.firstNegative,
         horizonEnd: look.horizonEnd,
+        path: look.path,
       }
     }
 

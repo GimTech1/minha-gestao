@@ -22,6 +22,13 @@ test('outubro limita o gasto diário, não o fim de setembro', () => {
   assert.equal(Math.round(r.perDay * 10) / 10, 94.6)
 })
 
+test('caminho do saldo para o gráfico', () => {
+  const r = computeLookahead({ today: d(9, 28), cash: 1592, spentToday: 0, pace: 0, events, monthEnds })
+  assert.equal(r.path[0].balance, 1592)
+  const oct31 = r.path.find((p) => p.date.getTime() === d(10, 31).getTime())
+  assert.equal(oct31?.balance, 1592 + 11250 - 4476 - 5150)
+})
+
 test('no ritmo atual acusa a primeira data negativa', () => {
   const r = computeLookahead({ today: d(9, 28), cash: 1592, spentToday: 0, pace: 150, events, monthEnds })
   // 31/10: 3216 - 150×34 = -1884

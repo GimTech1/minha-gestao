@@ -3,8 +3,11 @@ import { useStore, type Tx } from '../lib/store'
 import { MonthSwitch } from '../components/MonthSwitch'
 import { TxList } from '../components/TxList'
 import { brl, brl0, cap, daysInMonth, monthKey, monthLabel, shiftMonth } from '../lib/format'
-import { IconNext } from '../components/icons'
-import { byCategory, monthTxs, spentSince, startOfWeek, totals } from '../lib/stats'
+import { IconAlert, IconCalendar, IconCheck, IconDown, IconInfo, IconNext, IconTarget, IconTrend, IconWallet, IconX } from '../components/icons'
+import { Ring } from '../components/Ring'
+import { BalanceChart } from '../components/BalanceChart'
+import { Sheet } from '../components/Sheet'
+import { byCategory, monthTxs, totals } from '../lib/stats'
 import { summarize, useForecast, useOccurrences } from '../lib/usePlanned'
 import { occStatus, type Occurrence } from '../lib/planned'
 import { OccurrenceRow } from '../components/OccurrenceRow'
@@ -31,9 +34,6 @@ export function Home({ month, setMonth, onOpen, onAdd, goTo, onOpenOcc, onPay, o
   const prevCats = useMemo(() => new Map(byCategory(prevTxs, catById).map((c) => [c.id, c.total])), [prevTxs, catById])
 
   const isCurrent = month === monthKey(new Date())
-  const now = new Date()
-  const today = spentSince(txs, new Date(now.getFullYear(), now.getMonth(), now.getDate()))
-  const week = spentSince(txs, startOfWeek())
 
   const occ = useOccurrences(month)
   const planExp = summarize(occ, 'expense')
@@ -50,43 +50,34 @@ export function Home({ month, setMonth, onOpen, onAdd, goTo, onOpenOcc, onPay, o
   const lastDay = `${daysInMonth(month)}/${month.slice(5)}`
   const signed = (n: number) => `${n < 0 ? '−' : '+'}${brl(Math.abs(n))}`
   const signed0 = (n: number) => `${n < 0 ? '−' : '+'}${brl0(Math.abs(n))}`
-  const paceRatio = a.perDay > 0 ? Math.min(1.25, a.pace / a.perDay) : 1.25
   const needsData = a.verdict === 'no-balance' || a.verdict === 'no-income'
   const current = f.phase === 'current'
   const endShown = current ? a.endBalance : f.endBalance
   const todayBack = current ? a.free - (a.cash - a.reserved - f.billsOpen - f.goal) : 0
   const hasBalance = f.accountBalance != null
+  const [showPossible, setShowPossible] = useState(false)
 
   const ddmm = (d: Date) => d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
   const bindingLater = !!a.binding && a.binding.date.getMonth() !== new Date().getMonth()
   const bindingMonth = a.binding ? cap(a.binding.date.toLocaleDateString('pt-BR', { month: 'long' })) : ''
   const todayBackLook = a.binding ? a.free - (a.cash + a.binding.inflow - a.binding.outflow - a.binding.goals) : 0
+  const spentTodayVar = Math.max(0, a.perDay - a.leftToday)
+  const perDayShown = showPossible && f.possible?.perDay != null ? f.possible.perDay : a.perDay
+  const leftShown = Math.max(0, perDayShown - spentTodayVar)
 
   const status: { tone: string; label: string } =
     f.phase === 'past' ? (f.endBalance >= 0 ? { tone: 'ok', label: 'Positivo' } : { tone: 'bad', label: 'Negativo' })
-    : a.verdict === 'no-balance' ? { tone: 'muted', label: 'Saldo não informado' }
-    : a.verdict === 'no-income' ? { tone: 'muted', label: 'Sem receita prevista' }
-    : a.verdict === 'broke' ? { tone: 'bad', label: 'Sem saldo disponível' }
+    : a.verdict === 'no-balance' ? { tone: 'muted', label: 'Informe o saldo' }
+    : a.verdict === 'no-income' ? { tone: 'muted', label: 'Sem receita' }
+    : a.verdict === 'broke' ? { tone: 'bad', label: 'Sem folga' }
     : f.phase === 'future' ? { tone: 'muted', label: 'Previsão' }
-    : a.verdict === 'green' ? { tone: 'ok', label: 'Dentro do limite' }
-    : a.verdict === 'yellow' ? { tone: 'warn', label: 'Próximo do limite' }
+    : a.verdict === 'green' ? { tone: 'ok', label: 'Tranquilo' }
+    : a.verdict === 'yellow' ? { tone: 'warn', label: 'No limite' }
     : { tone: 'bad', label: 'Acima do limite' }
+  const StatusIcon = status.tone === 'ok' ? IconCheck : status.tone === 'muted' ? IconInfo : IconAlert
 
-  const note =
-    f.phase === 'past' ? `Receitas de ${brl(f.received)} menos despesas de ${brl(f.spent)}.`
-    : a.verdict === 'no-balance' ? 'Informe o saldo atual da conta para calcular quanto está disponível por dia. Receitas a receber só entram depois de creditadas.'
-    : a.verdict === 'no-income' ? 'Cadastre suas receitas em Previstos para projetar este mês.'
-    : a.verdict === 'broke'
-      ? current
-        ? `As contas até ${lastDay}${f.goal > 0 ? ' e a meta de economia' : ''} superam o saldo em ${brl(Math.abs(a.free))}.`
-        : `As contas${f.goal > 0 ? ' e a meta de economia' : ''} superam as receitas previstas em ${brl(Math.abs(a.free))}.`
-    : f.phase === 'future' ? `${brl(a.free)} disponíveis no mês após contas${f.goal > 0 ? ' e meta' : ''}.`
-    : a.verdict === 'red' ? `Reduza ${brl(a.cutPerDay)} por dia para a conta não ficar negativa${a.binding ? ` até ${ddmm(a.binding.date)}` : ''}.`
-    : bindingLater ? `${bindingMonth} é o período mais apertado. O limite diário já reserva o necessário para ele.`
-    : null
-
-  const heroValue = f.phase === 'past' ? f.endBalance : Math.max(0, a.perDay)
-  const [reais, cents] = brl(Math.abs(heroValue)).replace('R$', '').trim().split(',')
+  const [reais, cents] = brl(Math.max(0, perDayShown)).replace('R$', '').trim().split(',')
+  const [pReais, pCents] = brl(Math.abs(f.endBalance)).replace('R$', '').trim().split(',')
 
   // Limite opcional de gastos: compara com a previsão do mês
   const budget = profile?.monthly_budget ?? null
@@ -107,204 +98,168 @@ export function Home({ month, setMonth, onOpen, onAdd, goTo, onOpenOcc, onPay, o
         <MonthSwitch month={month} setMonth={setMonth} />
       </div>
 
-      <section className="sum">
-        <div className="sum-head">
-          <span className="sum-label">
-            {f.phase === 'past' ? 'Resultado do mês' : f.phase === 'future' ? 'Disponível por dia (previsão)' : 'Disponível por dia'}
-          </span>
-          <span className={`status ${status.tone}`}><i />{status.label}</span>
-        </div>
-
-        {!needsData || f.phase === 'past' ? (
-          <div className={`sum-value${f.phase === 'past' ? (f.endBalance < 0 ? ' bad' : ' ok') : ''}`}>
-            {f.phase === 'past' && (f.endBalance < 0 ? '−' : '+')}
-            <span className="cur">R$</span>{reais}<span className="cents">,{cents}</span>
-            {f.phase !== 'past' && <span className="per">/dia</span>}
-          </div>
-        ) : (
-          <div className="sum-value empty">—</div>
-        )}
-
-        {current && !needsData && a.verdict !== 'broke' && (
-          <div className="sum-sub">
-            {a.binding && bindingLater ? 'Considerando as contas até' : 'Até'} {a.binding ? ddmm(a.binding.date) : lastDay} · {a.daysLeft} {a.daysLeft === 1 ? 'dia' : 'dias'} · {brl(a.free)} disponíveis
-          </div>
-        )}
-        {note && <p className="sum-note">{note}</p>}
-        {a.verdict === 'no-balance' && (
-          <button className="btn sum-cta" onClick={onBalance}>Informar saldo em conta</button>
-        )}
-
-        {current && !needsData && a.verdict !== 'broke' && (
-          <div className="meter">
-            <div className="meter-track">
-              <i className={status.tone} style={{ width: `${(paceRatio / 1.25) * 100}%` }} />
-              <b style={{ left: `${(1 / 1.25) * 100}%` }} />
-            </div>
-            <div className="meter-legend">
-              <span>Média diária {brl(a.pace)}</span>
-              <span>Disponível hoje {brl(a.leftToday)}</span>
-            </div>
-          </div>
-        )}
-
-        <div className="sum-grid">
-          {f.phase === 'future' ? (
-            <>
-              <div><span>Receitas previstas</span><b>{brl0(f.willReceive)}</b></div>
-              <div><span>Contas previstas</span><b>{brl0(f.billsOpen)}</b></div>
-              <div><span>Meta de economia</span><b>{f.goal ? brl0(f.goal) : '—'}</b></div>
-            </>
-          ) : f.phase === 'past' ? (
-            <>
-              <div><span>Receitas</span><b>{brl0(f.received)}</b></div>
-              <div><span>Despesas</span><b>{brl0(f.spent)}</b></div>
-              <div><span>Meta</span><b>{f.goal > 0 ? (f.endBalance >= f.goal ? 'Atingida' : 'Não atingida') : '—'}</b></div>
-            </>
-          ) : (
-            <>
-              <div><span>Gasto no mês</span><b>{brl0(f.spent)}</b></div>
-              <div><span>Previsão do mês</span><b>{brl0(f.willSpend)}</b></div>
-              <div>
-                <span>{hasBalance ? 'Saldo previsto' : 'Resultado previsto'}</span>
-                <b className={endShown < 0 ? 'bad' : ''}>{signed0(endShown)}</b>
+      <section className={`today tone-${status.tone}`}>
+        <div className="today-top">
+          {f.phase === 'past' ? (
+            <div className="past-result">
+              <span className="k">Resultado do mês</span>
+              <div className={`big ${f.endBalance < 0 ? 'bad' : 'ok'}`}>
+                {f.endBalance < 0 ? '−' : '+'}<small>R$</small>{pReais}<small>,{pCents}</small>
               </div>
-            </>
+            </div>
+          ) : (
+            <Ring value={current ? spentTodayVar : 0} max={perDayShown} tone={status.tone}>
+              {needsData ? (
+                <b className="q">?</b>
+              ) : (
+                <>
+                  <b>
+                    <small>R$</small>{reais}<small>,{cents}</small>
+                  </b>
+                  <span>{showPossible ? 'por dia · possíveis' : 'por dia'}</span>
+                </>
+              )}
+            </Ring>
+          )}
+
+          <div className="today-side">
+            <span className={`pill ${status.tone}`}><StatusIcon />{status.label}</span>
+            {current && !needsData && (
+              <>
+                <div className="kv"><span>Gasto hoje</span><b>{brl0(spentTodayVar)}</b></div>
+                <div className="kv"><span>Resta hoje</span><b className={a.verdict === 'broke' ? 'bad' : ''}>{brl0(leftShown)}</b></div>
+                {a.binding && <div className="kv dim"><span>Planejado até</span><b>{ddmm(a.binding.date)}</b></div>}
+              </>
+            )}
+            {f.phase === 'future' && !needsData && (
+              <div className="kv"><span>Livre no mês</span><b>{brl0(a.free)}</b></div>
+            )}
+            {a.verdict === 'no-balance' && (
+              <button className="btn small-cta" onClick={onBalance}>Informar saldo</button>
+            )}
+            {a.verdict === 'no-income' && (
+              <button className="btn small-cta" onClick={onNewPlanned}>Cadastrar receita</button>
+            )}
+          </div>
+
+          {f.phase !== 'past' && !needsData && (
+            <button className="info-btn" onClick={() => setShowCalc(true)} aria-label="Como calculamos"><IconInfo /></button>
           )}
         </div>
 
-        {current && (a.incoming > 0 || a.reserved > 0 || budget || (a.binding && !needsData) || f.possible) ? (
-          <div className="sum-rows">
-            {a.binding && !needsData && (
-              <div>
-                <span>Projeção no ritmo atual<small>Média de {brl(a.pace)} por dia</small></span>
-                <b className={a.firstNegative ? 'bad' : 'good'}>
-                  {a.firstNegative ? `Negativa em ${ddmm(a.firstNegative.date)}` : `Positiva até ${a.horizonEnd ? `${a.horizonEnd.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '')}/${a.horizonEnd.getFullYear()}` : ''}`}
-                </b>
-              </div>
-            )}
-            {f.possible && !needsData && (
-              <div>
-                <span>
-                  Com os valores possíveis
-                  <small>
-                    {f.possible.inflow ? `+${brl0(f.possible.inflow)}` : ''}
-                    {f.possible.inflow && f.possible.outflow ? ' · ' : ''}
-                    {f.possible.outflow ? `−${brl0(f.possible.outflow)}` : ''} em 6 meses
-                    {f.possible.firstNegative ? ` · negativa em ${ddmm(f.possible.firstNegative.date)}` : ''}
-                  </small>
-                </span>
-                <b className={(f.possible.perDay ?? 0) <= 0 ? 'bad' : ''}>{brl(Math.max(0, f.possible.perDay ?? 0))}/dia</b>
-              </div>
-            )}
-            {a.incoming > 0 && (
-              <div><span>A receber até {lastDay}<small>{a.binding ? 'Considerado a partir da data em que cai' : 'Não incluído no disponível'}</small></span><b>{brl(a.incoming)}</b></div>
-            )}
-            {a.reserved > 0 && (
-              <div><span>Receita do próximo mês já creditada<small>Reservada para o próximo mês</small></span><b>{brl(a.reserved)}</b></div>
-            )}
-            {budget ? (
-              <div>
-                <span>Limite de gastos<small>{projPct >= 100 ? `Previsão excede em ${brl0(f.willSpend - budget)}` : `Previsão usa ${projPct.toFixed(0)}%`}</small></span>
-                <b>{brl0(budget)}</b>
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-
-        {f.phase !== 'past' && !needsData && (
-          <>
-            <button className="sum-toggle" onClick={() => setShowCalc(!showCalc)}>
-              {showCalc ? 'Ocultar cálculo' : 'Detalhar cálculo'}
-            </button>
-            {showCalc && (
-              <div className="calc-table">
-                {current && a.binding ? (
-                  <>
-                    <div><span>{hasBalance ? 'Saldo em conta' : 'Receitas menos despesas do mês'}</span><span>{signed(a.cash)}</span></div>
-                    <div><span>Receitas previstas até {ddmm(a.binding.date)}</span><span>+{brl(a.binding.inflow)}</span></div>
-                    <div><span>Contas previstas até {ddmm(a.binding.date)}</span><span>−{brl(a.binding.outflow)}</span></div>
-                    {a.binding.goals > 0 && <div><span>Metas de economia até {ddmm(a.binding.date)}</span><span>−{brl(a.binding.goals)}</span></div>}
-                    {todayBackLook > 0.005 && <div className="dim"><span>Gastos de hoje (descontados do disponível de hoje)</span><span>+{brl(todayBackLook)}</span></div>}
-                    <div className="total"><span>Disponível até {ddmm(a.binding.date)}</span><span>{signed(a.free)}</span></div>
-                    {a.free > 0 && <div className="total"><span>Por dia ({a.binding.days} dias)</span><span>{brl(a.perDay)}</span></div>}
-                    <div className="dim"><span>Checado em cada vencimento dos próximos 6 meses; esta é a data mais restritiva.</span><span /></div>
-                  </>
-                ) : current ? (
-                  hasBalance ? (
-                    <div><span>Saldo em conta</span><span>{signed(a.cash)}</span></div>
-                  ) : (
-                    <>
-                      <div><span>Receitas do mês</span><span>{brl(f.received)}</span></div>
-                      <div><span>Despesas do mês</span><span>−{brl(f.spent)}</span></div>
-                    </>
-                  )
-                ) : (
-                  <div><span>Receitas previstas</span><span>{brl(f.willReceive)}</span></div>
-                )}
-                {!a.binding && (
-                  <>
-                    {a.reserved > 0 && <div><span>Receita reservada para o próximo mês</span><span>−{brl(a.reserved)}</span></div>}
-                    <div><span>Contas a pagar{current ? ` até ${lastDay}` : ''}</span><span>−{brl(f.billsOpen)}</span></div>
-                    {f.goal > 0 && <div><span>Meta de economia</span><span>−{brl(f.goal)}</span></div>}
-                    {todayBack > 0 && <div className="dim"><span>Gastos de hoje (descontados do disponível de hoje)</span><span>+{brl(todayBack)}</span></div>}
-                    <div className="total"><span>Disponível</span><span>{signed(a.free)}</span></div>
-                    {a.daysLeft > 0 && a.free > 0 && (
-                      <div className="total"><span>Por dia ({a.daysLeft} {a.daysLeft === 1 ? 'dia' : 'dias'})</span><span>{brl(a.perDay)}</span></div>
-                    )}
-                  </>
-                )}
-                {current && (
-                  <div className="dim"><span>Saldo previsto no fim deste mês, mantida a média diária e somadas as receitas</span><span>{signed(endShown)}</span></div>
-                )}
-              </div>
-            )}
-          </>
-        )}
+        <div className="tiles">
+          {f.phase === 'past' ? (
+            <>
+              <div className="tile"><i className="in"><IconTrend /></i><span>Entrou</span><b>{brl0(f.received)}</b></div>
+              <div className="tile"><i><IconDown /></i><span>Gastei</span><b>{brl0(f.spent)}</b></div>
+              <div className="tile"><i><IconTarget /></i><span>Meta</span><b>{f.goal > 0 ? (f.endBalance >= f.goal ? 'Atingida' : 'Não') : '—'}</b></div>
+            </>
+          ) : f.phase === 'future' ? (
+            <>
+              <div className="tile"><i className="in"><IconTrend /></i><span>Entra</span><b>{brl0(f.willReceive)}</b></div>
+              <div className="tile"><i><IconCalendar /></i><span>Contas</span><b>{brl0(f.billsOpen)}</b></div>
+              <div className="tile"><i><IconTarget /></i><span>Guardar</span><b>{f.goal ? brl0(f.goal) : '—'}</b></div>
+            </>
+          ) : (
+            <>
+              <div className="tile"><i><IconDown /></i><span>Gasto</span><b>{brl0(f.spent)}</b></div>
+              <div className="tile"><i><IconTrend /></i><span>Previsão</span><b>{brl0(f.willSpend)}</b></div>
+              <div className="tile"><i className={endShown < 0 ? 'bad' : 'in'}><IconWallet /></i><span>Fim do mês</span><b className={endShown < 0 ? 'bad' : ''}>{signed0(endShown)}</b></div>
+            </>
+          )}
+        </div>
       </section>
 
-      {f.phase !== 'past' && f.willReceive <= 0 && (
+      {current && a.path && a.path.length > 1 && !needsData && (
+        <section className="card chart-card">
+          <div className="chart-head">
+            <span className="t">Saldo na conta</span>
+            <button className="balance-btn" onClick={onBalance}>{brl(a.cash)}</button>
+          </div>
+          {f.possible && (
+            <div className="seg mini">
+              <button className={!showPossible ? 'on' : ''} onClick={() => setShowPossible(false)}>Garantido</button>
+              <button className={showPossible ? 'on' : ''} onClick={() => setShowPossible(true)}>Com possíveis</button>
+            </div>
+          )}
+          <BalanceChart path={showPossible && f.possible ? f.possible.path : a.path} />
+          {bindingLater && !showPossible && (
+            <div className="chart-note"><IconCalendar />O limite diário guarda dinheiro para {bindingMonth.toLowerCase()}</div>
+          )}
+          {a.firstNegative && !showPossible && (
+            <div className="chart-note bad"><IconAlert />No ritmo atual fica negativo em {ddmm(a.firstNegative.date)}</div>
+          )}
+          <button className="chart-more" onClick={() => goTo('insights', 'future')}>
+            Próximos meses <IconNext />
+          </button>
+        </section>
+      )}
+
+      {f.phase !== 'past' && f.willReceive <= 0 && !needsData && (
         <button className="card plan-empty" onClick={onNewPlanned}>
-          <span>
-            <b>Cadastrar receita mensal</b>
-            <br />
-            Em Previstos, escolha "A receber" e "Todo mês" para projetar os próximos meses.
-          </span>
+          <span><b>Cadastrar receita mensal</b></span>
           <span className="chev"><IconNext /></span>
         </button>
       )}
 
-      <div className="strip">
-        <div className="stat">
-          <div className="k">Gasto hoje</div>
-          <div className="v">{brl0(today)}</div>
-        </div>
-        <div className="stat">
-          <div className="k">Na semana</div>
-          <div className="v">{brl0(week)}</div>
-        </div>
-        <button className="stat" style={{ textAlign: 'left' }} onClick={onBalance}>
-          <div className="k">{hasBalance ? 'Em conta' : 'Saldo do mês'}</div>
-          <div className={`v${(hasBalance ? a.cash : f.balanceNow) < 0 ? ' bad' : ''}`}>{signed0(hasBalance ? a.cash : f.balanceNow)}</div>
+      {current && !f.goal && !needsData && (
+        <button className="card plan-empty goal-row" onClick={() => goTo('settings')}>
+          <i className="goal-ico"><IconTarget /></i>
+          <span><b>Definir meta de economia</b></span>
+          <span className="chev"><IconNext /></span>
         </button>
-      </div>
+      )}
 
-      <div className="list links">
-        <button className="row" onClick={() => goTo('insights', 'future')}>
-          <div className="grow">
-            <div className="t">Próximos meses</div>
-            <div className="s">Saldo previsto e acumulado</div>
+      {showCalc && (
+        <Sheet onClose={() => setShowCalc(false)}>
+          <div className="sheet-h">
+            <button className="icon-btn" onClick={() => setShowCalc(false)} aria-label="Fechar"><IconX /></button>
+            <h3>Como calculamos</h3>
+            <span style={{ width: 36 }} />
           </div>
-          <span className="chev"><IconNext /></span>
-        </button>
-        <button className="row" onClick={() => goTo('settings')}>
-          <div className="grow">
-            <div className="t">Meta de economia</div>
-            <div className="s">{f.goal > 0 ? `${brl(f.goal)} por mês` : 'Não definida'}</div>
+          <p className="muted" style={{ fontSize: 13, lineHeight: 1.5, margin: '0 4px 8px' }}>
+            O valor por dia é o máximo que você pode gastar sem a conta ficar negativa em nenhum vencimento dos próximos 6 meses.
+            Receitas só contam a partir do dia em que caem; valores possíveis ficam de fora.
+          </p>
+          <div className="calc-table">
+            {current && a.binding ? (
+              <>
+                <div><span>{hasBalance ? 'Saldo em conta' : 'Receitas menos despesas do mês'}</span><span>{signed(a.cash)}</span></div>
+                <div><span>Receitas previstas até {ddmm(a.binding.date)}</span><span>+{brl(a.binding.inflow)}</span></div>
+                <div><span>Contas previstas até {ddmm(a.binding.date)}</span><span>−{brl(a.binding.outflow)}</span></div>
+                {a.binding.goals > 0 && <div><span>Metas de economia até {ddmm(a.binding.date)}</span><span>−{brl(a.binding.goals)}</span></div>}
+                {todayBackLook > 0.005 && <div className="dim"><span>Gastos de hoje (já descontados do dia)</span><span>+{brl(todayBackLook)}</span></div>}
+                <div className="total"><span>Disponível até {ddmm(a.binding.date)}</span><span>{signed(a.free)}</span></div>
+                {a.free > 0 && <div className="total"><span>÷ {a.binding.days} dias</span><span>{brl(a.perDay)}/dia</span></div>}
+              </>
+            ) : (
+              <>
+                <div><span>Receitas previstas</span><span>{brl(f.willReceive)}</span></div>
+                <div><span>Contas a pagar</span><span>−{brl(f.billsOpen)}</span></div>
+                {f.goal > 0 && <div><span>Meta de economia</span><span>−{brl(f.goal)}</span></div>}
+                {todayBack > 0 && <div className="dim"><span>Gastos de hoje</span><span>+{brl(todayBack)}</span></div>}
+                <div className="total"><span>Disponível</span><span>{signed(a.free)}</span></div>
+                {a.daysLeft > 0 && a.free > 0 && <div className="total"><span>÷ {a.daysLeft} dias</span><span>{brl(a.perDay)}/dia</span></div>}
+              </>
+            )}
+            {current && (
+              <div className="dim"><span>Média diária atual</span><span>{brl(a.pace)}</span></div>
+            )}
+            {current && a.incoming > 0 && (
+              <div className="dim"><span>A receber até {lastDay}</span><span>+{brl(a.incoming)}</span></div>
+            )}
+            {f.possible && (
+              <div className="dim">
+                <span>Com os valores possíveis ({f.possible.inflow ? `+${brl0(f.possible.inflow)}` : ''}{f.possible.outflow ? ` −${brl0(f.possible.outflow)}` : ''})</span>
+                <span>{brl(Math.max(0, f.possible.perDay ?? 0))}/dia</span>
+              </div>
+            )}
+            {budget ? (
+              <div className="dim"><span>Limite de gastos {brl0(budget)}</span><span>previsão {projPct.toFixed(0)}%</span></div>
+            ) : null}
           </div>
-          <span className="chev"><IconNext /></span>
-        </button>
-      </div>
+        </Sheet>
+      )}
 
       <div className="section-h">
         <h2>Contas previstas</h2>
