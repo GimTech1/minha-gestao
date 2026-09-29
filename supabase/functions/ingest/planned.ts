@@ -119,13 +119,17 @@ export function occStatus(o: Occurrence, today = new Date()): OccStatus {
   return 'upcoming'
 }
 
-// Em aberto para casar com um pagamento: o mês atual + atrasadas do mês anterior
+// Em aberto para casar com um pagamento: o mês atual, atrasadas do mês anterior
+// e as do mês seguinte que vencem em até 5 dias (salário do dia 1º que cai no dia 30/31)
 export function openOccurrences(planned: Planned[], paid: Map<string, PaidRef>, today = new Date()) {
   const month = monthOf(today)
   const prev = addMonths(month, -1)
+  const next = addMonths(month, 1)
+  const soon = today.getTime() + 5 * 86400000
   return [
     ...occurrencesInMonth(planned, prev, paid).filter((o) => occStatus(o, today) === 'overdue'),
     ...occurrencesInMonth(planned, month, paid).filter((o) => !o.paid && !o.skipped),
+    ...occurrencesInMonth(planned, next, paid).filter((o) => !o.paid && !o.skipped && o.due.getTime() <= soon),
   ]
 }
 

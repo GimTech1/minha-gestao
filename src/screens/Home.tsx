@@ -54,7 +54,7 @@ export function Home({ month, setMonth, onOpen, onAdd, goTo, onOpenOcc, onPay, o
   const needsData = a.verdict === 'no-balance' || a.verdict === 'no-income'
   const current = f.phase === 'current'
   const endShown = current ? a.endBalance : f.endBalance
-  const todayBack = current ? a.free - (a.cash - f.billsOpen - f.goal) : 0
+  const todayBack = current ? a.free - (a.cash - a.reserved - f.billsOpen - f.goal) : 0
   const hasBalance = f.accountBalance != null
 
   const tone =
@@ -129,6 +129,9 @@ export function Home({ month, setMonth, onOpen, onAdd, goTo, onOpenOcc, onPay, o
           </>
         )}
         <p className="verdict-msg">{message}</p>
+        {current && a.reserved > 0 && (
+          <div className="incoming">💰 {brl0(a.reserved)} do mês que vem já caiu · fica guardado para lá</div>
+        )}
         {current && a.incoming > 0 && (
           <div className="incoming">💰 +{brl0(a.incoming)} a receber este mês · entra no limite quando cair</div>
         )}
@@ -196,6 +199,9 @@ export function Home({ month, setMonth, onOpen, onAdd, goTo, onOpenOcc, onPay, o
                   )
                 ) : (
                   <div><span>Vai entrar no mês</span><span>{brl(f.willReceive)}</span></div>
+                )}
+                {a.reserved > 0 && (
+                  <div><span>− Receita do mês que vem que já caiu</span><span>{brl(a.reserved)}</span></div>
                 )}
                 <div><span>− Contas a pagar{current ? ` até ${lastDay}` : ''}</span><span>{brl(f.billsOpen)}</span></div>
                 {f.goal > 0 && <div><span>− Meta de guardar</span><span>{brl(f.goal)}</span></div>}

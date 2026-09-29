@@ -62,10 +62,14 @@ export function useForecast(month: string): Forecast {
     let received = 0
     let spentVariable = 0
     let spentVariableToday = 0
+    let reserved = 0
     const today = dayKey(now)
     for (const t of txs) {
       const d = new Date(t.occurred_at)
-      if (monthKey(d) !== month) continue
+      // Conta ligada a um previsto pertence ao mês dele (salário do dia 1º que caiu no dia 30 é do mês seguinte)
+      const txMonth = t.planned_month ? t.planned_month.slice(0, 7) : monthKey(d)
+      if (t.kind === 'income' && t.planned_month && txMonth > current && monthKey(d) <= current) reserved += t.amount
+      if (txMonth !== month) continue
       if (t.kind === 'income') {
         received += t.amount
         continue
@@ -110,6 +114,7 @@ export function useForecast(month: string): Forecast {
         incomeOpen,
         goal,
         available: accountBalance,
+        reserved,
       }),
     }
   }, [txs, occ, month, goal, accountBalance])

@@ -16,6 +16,7 @@ export interface AllowanceInput {
   incomeOpen: number
   goal: number // quanto quer guardar no mês
   available: number | null // saldo em conta agora, se o usuário informou
+  reserved?: number // receita do mês seguinte que já caiu (ex.: salário do dia 1º pago no dia 30): fica para o mês dela
 }
 
 export interface Allowance {
@@ -29,11 +30,13 @@ export interface Allowance {
   endBalance: number // no fim do mês, mantendo o ritmo e contando o que ainda vai entrar
   cutPerDay: number // quanto reduzir por dia para caber (quando vermelho)
   incoming: number // a receber ainda neste mês (fora do limite)
+  reserved: number
 }
 
 export function computeAllowance(i: AllowanceInput): Allowance {
   const current = i.phase === 'current'
   const daysLeft = current ? i.days - i.day + 1 : i.phase === 'future' ? i.days : 0
+  const reserved = current ? (i.reserved ?? 0) : 0
   const cash = current ? (i.available ?? i.received - i.spent) : i.received - i.spent
   const elapsed = current ? i.day : i.days
   const pace = i.phase === 'future' ? 0 : i.spentVariable / Math.max(1, elapsed)
@@ -41,10 +44,10 @@ export function computeAllowance(i: AllowanceInput): Allowance {
 
   // Gasto do dia a dia de hoje volta para o "livre", para o limite de hoje não encolher a cada compra
   const free = current
-    ? cash - i.billsOpen - i.goal + i.spentVariableToday
+    ? cash - reserved - i.billsOpen - i.goal + i.spentVariableToday
     : i.received + i.incomeOpen - i.spent - i.billsOpen - i.goal
   const perDay = daysLeft > 0 ? free / daysLeft : 0
-  const endBalance = cash + (current ? i.incomeOpen : 0) - (current ? i.billsOpen + ahead : 0)
+  const endBalance = cash - reserved + (current ? i.incomeOpen : 0) - (current ? i.billsOpen + ahead : 0)
 
   let verdict: Verdict
   if (current && i.available == null && i.received <= 0) verdict = 'no-balance'
@@ -66,5 +69,6 @@ export function computeAllowance(i: AllowanceInput): Allowance {
     endBalance,
     cutPerDay: Math.max(0, pace - perDay),
     incoming: current ? i.incomeOpen : 0,
+    reserved,
   }
 }

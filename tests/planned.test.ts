@@ -43,6 +43,15 @@ test('status e pagamento', () => {
   assert.equal(occStatus(open, new Date(2026, 8, 1)), 'upcoming')
 })
 
+test('salário do dia 1º que cai no dia 30 casa com o mês seguinte', () => {
+  const salary: Planned = { ...base, id: 's', kind: 'income', amount: 11250, description: 'Salário', day: 1 }
+  const paid = paidIndex([{ id: 't', planned_id: 's', planned_month: '2026-09-01', amount: 11250 }])
+  const m = findMatch([salary], paid, 'income', 11250, 'Transferência recebida de EMPRESA', new Date(2026, 8, 30))
+  assert.equal(m?.month, '2026-10')
+  // muito antes (dia 20) não casa com outubro
+  assert.equal(findMatch([salary], paid, 'income', 11250, 'EMPRESA', new Date(2026, 8, 20)), null)
+})
+
 test('findMatch: valor + nome ou vencimento próximo', () => {
   const netflix: Planned = { ...base, id: 'n', description: 'Netflix', amount: 55.9, day: 20 }
   const plans = [base, netflix]

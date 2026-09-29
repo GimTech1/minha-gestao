@@ -53,6 +53,12 @@ test('saldo informado vence o "entrou - saiu" do mês', () => {
   assert.equal(a.verdict, 'broke') // 800 - 500 - 1000 < 0
 })
 
+test('salário do mês seguinte que já caiu não entra no limite deste mês', () => {
+  const a = computeAllowance({ ...base, available: 13000, reserved: 11250, goal: 0 })
+  assert.equal(a.free, 13000 - 11250 - 500)
+  assert.equal(a.reserved, 11250)
+})
+
 test('mês futuro sem receita', () => {
   assert.equal(computeAllowance({ ...base, phase: 'future', received: 0, incomeOpen: 0 }).verdict, 'no-income')
 })

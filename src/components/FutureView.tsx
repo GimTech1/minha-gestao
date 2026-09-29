@@ -37,13 +37,13 @@ export function FutureView({ onOpenMonth }: { onOpenMonth: (m: string) => void }
         variablePerMonth,
         horizon,
         includeVariable,
-        start: hasBalance ? f.allowance.cash : 0,
+        start: hasBalance ? f.allowance.cash - f.allowance.reserved : 0,
       }),
     [planned, txs, current, f, variablePerMonth, horizon, includeVariable, hasBalance],
   )
 
   const last = rows[rows.length - 1]
-  const avg = (last.cumulative - (hasBalance ? f.allowance.cash : 0)) / rows.length
+  const avg = (last.cumulative - (hasBalance ? f.allowance.cash - f.allowance.reserved : 0)) / rows.length
   const worst = rows.reduce((w, r) => (r.balance < w.balance ? r : w), rows[0])
   const firstNegative = rows.find((r) => r.cumulative < 0)
   const maxAbs = Math.max(1, ...rows.map((r) => Math.abs(r.cumulative)))
