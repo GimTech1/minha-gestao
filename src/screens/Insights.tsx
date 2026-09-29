@@ -4,6 +4,7 @@ import { MonthSwitch } from '../components/MonthSwitch'
 import { brl, brl0, daysInMonth, MONTHS, monthKey, monthLabel, shiftMonth } from '../lib/format'
 import { byCategory, dailyExpense, monthTxs, totals, type CatTotal } from '../lib/stats'
 import { useForecast } from '../lib/usePlanned'
+import { FutureView } from '../components/FutureView'
 
 const MAX_SLICES = 7
 
@@ -65,7 +66,17 @@ function Donut({ data, total }: { data: CatTotal[]; total: number }) {
   )
 }
 
-export function Insights({ month, setMonth }: { month: string; setMonth: (m: string) => void }) {
+export type InsightsView = 'month' | 'future'
+
+interface Props {
+  month: string
+  setMonth: (m: string) => void
+  view: InsightsView
+  setView: (v: InsightsView) => void
+  onOpenMonth: (m: string) => void
+}
+
+export function Insights({ month, setMonth, view, setView, onOpenMonth }: Props) {
   const { txs, catById } = useStore()
   const [selDay, setSelDay] = useState<number | null>(null)
   const [selMonth, setSelMonth] = useState<string | null>(null)
@@ -113,12 +124,31 @@ export function Insights({ month, setMonth }: { month: string; setMonth: (m: str
   const delta = prev.expense ? ((t.expense - prev.expense) / prev.expense) * 100 : null
   const topDay = daily.reduce((best, v, i) => (v > daily[best] ? i : best), 0)
 
-  return (
-    <div className="screen">
+  const header = (
+    <>
       <div className="topbar">
         <h1>Análise</h1>
-        <MonthSwitch month={month} setMonth={setMonth} />
+        {view === 'month' && <MonthSwitch month={month} setMonth={setMonth} />}
       </div>
+      <div className="seg" style={{ marginBottom: 12 }}>
+        <button className={view === 'month' ? 'on' : ''} onClick={() => setView('month')}>Mês</button>
+        <button className={view === 'future' ? 'on' : ''} onClick={() => setView('future')}>Próximos meses</button>
+      </div>
+    </>
+  )
+
+  if (view === 'future') {
+    return (
+      <div className="screen">
+        {header}
+        <FutureView onOpenMonth={onOpenMonth} />
+      </div>
+    )
+  }
+
+  return (
+    <div className="screen">
+      {header}
 
       <div className="strip" style={{ gridTemplateColumns: '1fr 1fr' }}>
         <div className="stat">

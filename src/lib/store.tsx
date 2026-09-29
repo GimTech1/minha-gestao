@@ -35,6 +35,8 @@ export interface Profile {
   name: string | null
   monthly_budget: number | null
   savings_goal: number | null
+  balance_amount: number | null
+  balance_at: string | null
   ingest_token: string
 }
 
@@ -113,7 +115,7 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
     setSyncing(true)
     try {
       const [p, c, t, pl] = await Promise.all([
-        supabase.from('profiles').select('id, name, monthly_budget, savings_goal, ingest_token').eq('id', userId).maybeSingle(),
+        supabase.from('profiles').select('id, name, monthly_budget, savings_goal, balance_amount, balance_at, ingest_token').eq('id', userId).maybeSingle(),
         supabase.from('categories').select('id, name, emoji, color, kind, keywords, sort').order('sort'),
         supabase.from('transactions').select(TX_COLS).order('occurred_at', { ascending: false }).range(0, 9999),
         supabase.from('planned').select(PLAN_COLS).order('created_at'),
@@ -124,6 +126,7 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
           ...p.data,
           monthly_budget: p.data.monthly_budget == null ? null : Number(p.data.monthly_budget),
           savings_goal: p.data.savings_goal == null ? null : Number(p.data.savings_goal),
+          balance_amount: p.data.balance_amount == null ? null : Number(p.data.balance_amount),
         })
       if (c.data) setCategories(c.data as Category[])
       if (t.data) {

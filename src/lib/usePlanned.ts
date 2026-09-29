@@ -45,6 +45,7 @@ export interface Forecast {
   endBalance: number
   allowance: Allowance
   goal: number
+  accountBalance: number | null // saldo em conta agora (informado + lançamentos depois)
 }
 
 // Previsão do mês: o que já saiu + contas em aberto + ritmo dos gastos do dia a dia (sem as contas)
@@ -52,6 +53,7 @@ export function useForecast(month: string): Forecast {
   const { txs, profile } = useStore()
   const occ = useOccurrences(month)
   const goal = profile?.savings_goal ?? 0
+  const accountBalance = useAccountBalance()
   return useMemo(() => {
     const now = new Date()
     const current = monthKey(now)
@@ -95,6 +97,7 @@ export function useForecast(month: string): Forecast {
       willReceive,
       endBalance: willReceive - willSpend,
       goal,
+      accountBalance,
       allowance: computeAllowance({
         phase,
         days,
@@ -106,9 +109,25 @@ export function useForecast(month: string): Forecast {
         billsOpen,
         incomeOpen,
         goal,
+        available: accountBalance,
       }),
     }
-  }, [txs, occ, month, goal])
+  }, [txs, occ, month, goal, accountBalance])
+}
+
+// Saldo em conta: o valor informado pelo usuário + o que entrou - o que saiu depois disso
+export function useAccountBalance(): number | null {
+  const { txs, profile } = useStore()
+  return useMemo(() => {
+    if (profile?.balance_amount == null || !profile.balance_at) return null
+    const since = new Date(profile.balance_at).getTime()
+    let bal = profile.balance_amount
+    for (const t of txs) {
+      if (new Date(t.occurred_at).getTime() <= since) continue
+      bal += t.kind === 'income' ? t.amount : -t.amount
+    }
+    return bal
+  }, [txs, profile?.balance_amount, profile?.balance_at])
 }
 
 // Lançamento que paga a ocorrência

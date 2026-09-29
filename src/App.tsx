@@ -6,11 +6,12 @@ import { StoreProvider, useStore, type Tx } from './lib/store'
 import { Login } from './screens/Login'
 import { Home } from './screens/Home'
 import { History, type ListView } from './screens/History'
-import { Insights } from './screens/Insights'
+import { Insights, type InsightsView } from './screens/Insights'
 import { Settings } from './screens/Settings'
 import { AddSheet } from './components/AddSheet'
 import { PlannedSheet } from './components/PlannedSheet'
 import { OccurrenceSheet } from './components/OccurrenceSheet'
+import { BalanceSheet } from './components/BalanceSheet'
 import { paymentTx } from './lib/usePlanned'
 import type { Occurrence, Planned } from './lib/planned'
 import { IconChart, IconGear, IconHome, IconList, IconPlus } from './components/icons'
@@ -27,7 +28,9 @@ function Shell() {
     new URLSearchParams(location.search).has('add') ? { tx: null } : null,
   )
   const [listView, setListView] = useState<ListView>('txs')
+  const [insightsView, setInsightsView] = useState<InsightsView>('month')
   const [occSheet, setOccSheet] = useState<Occurrence | null>(null)
+  const [balanceSheet, setBalanceSheet] = useState(false)
   const [planSheet, setPlanSheet] = useState<{ p: Planned | null } | null>(null)
   const [toast, setToast] = useState<{ msg: string; undo?: () => void } | null>(null)
   const toastTimer = useRef<number | undefined>(undefined)
@@ -58,8 +61,9 @@ function Shell() {
     if (v === 'txs' && month > monthKey(new Date())) setMonth(monthKey(new Date()))
   }
 
-  const goTo = (t: Tab, view?: ListView) => {
-    if (view) changeListView(view)
+  const goTo = (t: Tab, view?: ListView | InsightsView) => {
+    if (view === 'txs' || view === 'planned') changeListView(view)
+    if (view === 'month' || view === 'future') setInsightsView(view)
     setTab(t)
   }
 
@@ -77,6 +81,7 @@ function Shell() {
           onOpenOcc={setOccSheet}
           onPay={payNow}
           onNewPlanned={() => setPlanSheet({ p: null })}
+          onBalance={() => setBalanceSheet(true)}
         />
       ) : tab === 'list' ? (
         <History
@@ -90,7 +95,16 @@ function Shell() {
           onNewPlanned={() => setPlanSheet({ p: null })}
         />
       ) : tab === 'insights' ? (
-        <Insights month={month} setMonth={setMonth} />
+        <Insights
+          month={month}
+          setMonth={setMonth}
+          view={insightsView}
+          setView={setInsightsView}
+          onOpenMonth={(m) => {
+            setMonth(m)
+            goTo('list', 'planned')
+          }}
+        />
       ) : (
         <Settings notify={notify} />
       )}
@@ -143,6 +157,8 @@ function Shell() {
           notify={notify}
         />
       )}
+
+      {balanceSheet && <BalanceSheet onClose={() => setBalanceSheet(false)} notify={notify} />}
 
       {planSheet && <PlannedSheet key={planSheet.p?.id ?? 'new'} editing={planSheet.p} onClose={() => setPlanSheet(null)} notify={notify} />}
 
