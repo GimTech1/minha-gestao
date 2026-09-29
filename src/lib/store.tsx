@@ -66,7 +66,7 @@ const Ctx = createContext<Store | null>(null)
 export const useStore = () => useContext(Ctx)!
 
 const TX_COLS = 'id, kind, amount, category_id, description, method, occurred_at, source, created_at, planned_id, planned_month'
-const PLAN_COLS = 'id, kind, amount, description, category_id, method, type, day, start_month, installments, end_month, skipped_months'
+const PLAN_COLS = 'id, kind, amount, description, category_id, method, type, day, start_month, installments, end_month, skipped_months, tentative'
 const toPlanned = (r: Record<string, unknown>): Planned => ({ ...(r as unknown as Planned), amount: Number(r.amount) })
 const sortTx = (a: Tx, b: Tx) => b.occurred_at.localeCompare(a.occurred_at)
 const toTx = (r: Record<string, unknown>): Tx => ({ ...(r as unknown as Tx), amount: Number(r.amount) })

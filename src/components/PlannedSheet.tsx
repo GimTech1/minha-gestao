@@ -40,6 +40,7 @@ export function PlannedSheet({ editing, onClose, notify }: Props) {
   const [method, setMethod] = useState<string | null>(editing?.method ?? null)
   const [busy, setBusy] = useState(false)
   const [paidThisMonth, setPaidThisMonth] = useState(true)
+  const [tentative, setTentative] = useState(editing?.tentative ?? false)
 
   const cats = useMemo(() => categories.filter((c) => c.kind === kind), [categories, kind])
   const value = parseMoney(amount) ?? 0
@@ -88,6 +89,7 @@ export function PlannedSheet({ editing, onClose, notify }: Props) {
       installments: type === 'installments' ? n : null,
       end_month: type === 'monthly' ? (editing?.end_month ?? null) : null,
       skipped_months: skipped,
+      tentative,
     }
     setBusy(true)
     try {
@@ -209,6 +211,17 @@ export function PlannedSheet({ editing, onClose, notify }: Props) {
           <input className="input" type="month" value={startMonth} onChange={(e) => e.target.value && setStartMonth(e.target.value)} />
         </label>
       )}
+
+      <button className={`toggle-row${tentative ? ' on' : ''}`} onClick={() => setTentative(!tentative)}>
+        <span className="box">{tentative ? '✓' : ''}</span>
+        <span>
+          <b>Possível, não garantido</b>
+          <br />
+          <span className="muted">
+            Fica fora do disponível por dia. Aparece no cenário "com os possíveis" para você planejar.
+          </span>
+        </span>
+      </button>
 
       <div className="field">
         <span>Categoria</span>

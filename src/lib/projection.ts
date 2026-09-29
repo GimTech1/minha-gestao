@@ -21,6 +21,7 @@ export interface ProjectionInput {
   horizon: number // quantos meses, contando o atual
   includeVariable: boolean
   start?: number // saldo em conta hoje: o acumulado vira "quanto vou ter na conta"
+  includePossible?: boolean // soma também os valores possíveis (não garantidos)
 }
 
 export function projectMonths(i: ProjectionInput): MonthProjection[] {
@@ -28,13 +29,15 @@ export function projectMonths(i: ProjectionInput): MonthProjection[] {
   let cumulative = i.start ?? 0
   for (let k = 0; k < i.horizon; k++) {
     const month = addMonths(i.current.month, k)
-    const occ = occurrencesInMonth(i.planned, month, i.paid).filter((o) => !o.skipped)
+    const occ = occurrencesInMonth(i.planned, month, i.paid).filter((o) => !o.skipped && (i.includePossible || !o.planned.tentative || o.paid))
     let income: number
     let bills: number
     let variable: number
     if (k === 0) {
-      income = i.current.willReceive
-      bills = i.current.bills
+      // Mês atual vem da previsão (só garantidos); os possíveis em aberto somam à parte
+      const extra = i.includePossible ? occ.filter((o) => o.planned.tentative && !o.paid) : []
+      income = i.current.willReceive + extra.filter((o) => o.planned.kind === 'income').reduce((s, o) => s + o.amount, 0)
+      bills = i.current.bills + extra.filter((o) => o.planned.kind === 'expense').reduce((s, o) => s + o.amount, 0)
       variable = i.includeVariable ? i.current.variable : 0
     } else {
       income = occ.filter((o) => o.planned.kind === 'income').reduce((s, o) => s + o.amount, 0)

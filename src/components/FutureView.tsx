@@ -16,6 +16,8 @@ export function FutureView({ onOpenMonth }: { onOpenMonth: (m: string) => void }
   const f = useForecast(current)
   const [horizon, setHorizon] = useState(12)
   const [includeVariable, setIncludeVariable] = useState(true)
+  const [includePossible, setIncludePossible] = useState(false)
+  const hasPossible = planned.some((p) => p.tentative)
   const [sel, setSel] = useState<string | null>(null)
   const [open, setOpen] = useState<string | null>(null)
   const hasBalance = f.accountBalance != null
@@ -38,8 +40,9 @@ export function FutureView({ onOpenMonth }: { onOpenMonth: (m: string) => void }
         horizon,
         includeVariable,
         start: hasBalance ? f.allowance.cash - f.allowance.reserved : 0,
+        includePossible,
       }),
-    [planned, txs, current, f, variablePerMonth, horizon, includeVariable, hasBalance],
+    [planned, txs, current, f, variablePerMonth, horizon, includeVariable, hasBalance, includePossible],
   )
 
   const last = rows[rows.length - 1]
@@ -65,6 +68,11 @@ export function FutureView({ onOpenMonth }: { onOpenMonth: (m: string) => void }
         <button className={`chip${includeVariable ? ' on' : ''}`} onClick={() => setIncludeVariable(!includeVariable)}>
           {includeVariable ? '✓ ' : ''}Dia a dia ~{brl0(variablePerMonth)}/mês
         </button>
+        {hasPossible && (
+          <button className={`chip${includePossible ? ' on' : ''}`} onClick={() => setIncludePossible(!includePossible)}>
+            {includePossible ? '✓ ' : ''}Incluir possíveis
+          </button>
+        )}
       </div>
 
       <div className={`card future-hero ${last.cumulative < 0 ? 'neg' : 'pos'}`}>
@@ -160,7 +168,7 @@ export function FutureView({ onOpenMonth }: { onOpenMonth: (m: string) => void }
                       const c = o.planned.category_id ? catById.get(o.planned.category_id) : undefined
                       return (
                         <div key={o.planned.id} className="line">
-                          <span>{c?.emoji ?? '🧾'} {o.label} <small>dia {o.due.getDate()}</small></span>
+                          <span>{c?.emoji ?? '🧾'} {o.label} <small>dia {o.due.getDate()}{o.planned.tentative ? ' · possível' : ''}</small></span>
                           <span>−{brl(o.amount)}</span>
                         </div>
                       )

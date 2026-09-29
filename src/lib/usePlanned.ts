@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { useStore, type Tx } from './store'
-import { occurrencesInMonth, paidIndex, monthStart, type Occurrence } from './planned'
+import { addMonths, occurrencesInMonth, paidIndex, monthStart, type Occurrence } from './planned'
+import { computeLookahead, type CashEvent } from './lookahead'
 import { daysInMonth, dayKey, monthKey } from './format'
 import { computeAllowance, type Allowance } from './allowance'
 
@@ -17,11 +18,12 @@ export interface PlanSummary {
   openCount: number
 }
 
-// Puladas não contam no previsto
+// Puladas não contam no previsto; possíveis em aberto também não (só se acontecerem)
 export function summarize(occ: Occurrence[], kind: 'expense' | 'income'): PlanSummary {
   const s: PlanSummary = { total: 0, paid: 0, open: 0, openCount: 0 }
   for (const o of occ) {
     if (o.planned.kind !== kind || o.skipped) continue
+    if (o.planned.tentative && !o.paid) continue
     s.total += o.paid ? o.paid.amount : o.amount
     if (o.paid) s.paid += o.paid.amount
     else {
@@ -45,12 +47,14 @@ export interface Forecast {
   endBalance: number
   allowance: Allowance
   goal: number
+  // Cenário com os valores possíveis (não garantidos) dos próximos 6 meses
+  possible: { inflow: number; outflow: number; perDay: number | null; firstNegative: { date: Date; balance: number } | null } | null
   accountBalance: number | null // saldo em conta agora (informado + lançamentos depois)
 }
 
 // Previsão do mês: o que já saiu + contas em aberto + ritmo dos gastos do dia a dia (sem as contas)
 export function useForecast(month: string): Forecast {
-  const { txs, profile } = useStore()
+  const { txs, profile, planned } = useStore()
   const occ = useOccurrences(month)
   const goal = profile?.savings_goal ?? 0
   const accountBalance = useAccountBalance()
@@ -89,6 +93,84 @@ export function useForecast(month: string): Forecast {
     const variableAhead = phase === 'current' ? (spentVariable / elapsed) * (days - elapsed) : 0
     const willSpend = spent + billsOpen + Math.max(0, variableAhead)
     const willReceive = received + incomeOpen
+    let possible: Forecast['possible'] = null
+    let allowance = computeAllowance({
+      phase,
+      days,
+      day: now.getDate(),
+      spent,
+      spentVariable,
+      spentVariableToday,
+      received,
+      billsOpen,
+      incomeOpen,
+      goal,
+      available: accountBalance,
+      reserved,
+    })
+
+    // Mês atual: o disponível por dia olha os próximos 6 meses, conta a conta na data dela
+    if (phase === 'current' && allowance.verdict !== 'no-balance') {
+      const paid = paidIndex(txs)
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+      const events: CashEvent[] = []
+      const possibleEvents: CashEvent[] = []
+      const monthEnds: Date[] = []
+      for (let k = 0; k < 6; k++) {
+        const m = addMonths(month, k)
+        const [y, mm] = m.split('-').map(Number)
+        const end = new Date(y, mm, 0)
+        monthEnds.push(end)
+        if (goal > 0) events.push({ date: end, amount: -goal, label: 'Meta de economia', goal: true })
+        for (const o of occurrencesInMonth(planned, m, paid)) {
+          if (o.paid || o.skipped) continue
+          // Receita atrasada não conta (pode já ter caído sem registro); conta atrasada vence hoje
+          if (o.planned.kind === 'income' && o.due < todayStart) continue
+          const ev = { date: o.due, amount: o.planned.kind === 'income' ? o.amount : -o.amount, label: o.label }
+          if (o.planned.tentative) possibleEvents.push(ev)
+          else events.push(ev)
+        }
+      }
+      const look = computeLookahead({
+        today: now,
+        cash: allowance.cash,
+        spentToday: spentVariableToday,
+        pace: allowance.pace,
+        events,
+        monthEnds,
+      })
+      if (possibleEvents.length) {
+        const withPossible = computeLookahead({
+          today: now,
+          cash: allowance.cash,
+          spentToday: spentVariableToday,
+          pace: allowance.pace,
+          events: [...events, ...possibleEvents],
+          monthEnds,
+        })
+        possible = {
+          inflow: possibleEvents.filter((e) => e.amount > 0).reduce((s, e) => s + e.amount, 0),
+          outflow: possibleEvents.filter((e) => e.amount < 0).reduce((s, e) => s - e.amount, 0),
+          perDay: withPossible.perDay,
+          firstNegative: withPossible.firstNegative,
+        }
+      }
+      const perDay = look.perDay
+      allowance = {
+        ...allowance,
+        perDay,
+        free: look.binding.available,
+        daysLeft: look.binding.days,
+        leftToday: Math.max(0, perDay - spentVariableToday),
+        cutPerDay: Math.max(0, allowance.pace - perDay),
+        reserved: 0,
+        verdict: perDay <= 0 ? 'broke' : allowance.pace > perDay ? 'red' : allowance.pace > perDay * 0.8 ? 'yellow' : 'green',
+        binding: look.binding,
+        firstNegative: look.firstNegative,
+        horizonEnd: look.horizonEnd,
+      }
+    }
+
     return {
       phase,
       spent,
@@ -102,22 +184,10 @@ export function useForecast(month: string): Forecast {
       endBalance: willReceive - willSpend,
       goal,
       accountBalance,
-      allowance: computeAllowance({
-        phase,
-        days,
-        day: now.getDate(),
-        spent,
-        spentVariable,
-        spentVariableToday,
-        received,
-        billsOpen,
-        incomeOpen,
-        goal,
-        available: accountBalance,
-        reserved,
-      }),
+      allowance,
+      possible,
     }
-  }, [txs, occ, month, goal, accountBalance])
+  }, [txs, occ, month, goal, accountBalance, planned])
 }
 
 // Saldo em conta: o valor informado pelo usuário + o que entrou - o que saiu depois disso

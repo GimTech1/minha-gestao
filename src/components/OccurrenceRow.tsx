@@ -36,6 +36,7 @@ export function OccurrenceRow({ o, onOpen, onPay }: Props) {
       <span className="mid">
         <div className="title">{o.label}</div>
         <div className="meta">
+          {o.planned.tentative && !o.paid && <span className="badge maybe">POSSÍVEL</span>}
           <span className={`st ${st}`}>{text}</span>
           {c && <span>· {c.name}</span>}
         </div>

@@ -1,3 +1,5 @@
+import type { Checkpoint } from './lookahead.ts'
+
 // "Posso gastar?": quanto sobra para o dia a dia depois das contas e da meta de guardar,
 // dividido pelos dias que faltam, comparado com o ritmo atual de gastos.
 // No mês atual só conta dinheiro que já está na conta: receita a receber não entra no limite até cair.
@@ -31,6 +33,10 @@ export interface Allowance {
   cutPerDay: number // quanto reduzir por dia para caber (quando vermelho)
   incoming: number // a receber ainda neste mês (fora do limite)
   reserved: number
+  // Só no mês atual, com a visão dos próximos meses
+  binding?: Checkpoint // data que limita o gasto diário
+  firstNegative?: { date: Date; balance: number } | null // mantendo a média diária
+  horizonEnd?: Date
 }
 
 export function computeAllowance(i: AllowanceInput): Allowance {

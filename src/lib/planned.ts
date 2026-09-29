@@ -17,6 +17,7 @@ export interface Planned {
   installments: number | null
   end_month: string | null // último mês incluído, 'YYYY-MM-01'
   skipped_months: string[]
+  tentative?: boolean // possível, não garantido: fica fora do cálculo seguro
 }
 
 // O mínimo de um lançamento para saber se pagou alguma ocorrência

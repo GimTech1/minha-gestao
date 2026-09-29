@@ -14,6 +14,9 @@ export function PlannedList({ month, onOpen, onPay, onNew }: Props) {
   const occ = useOccurrences(month)
   const exp = summarize(occ, 'expense')
   const inc = summarize(occ, 'income')
+  const maybe = occ.filter((o) => o.planned.tentative && !o.paid && !o.skipped)
+  const maybeIn = maybe.filter((o) => o.planned.kind === 'income').reduce((s, o) => s + o.amount, 0)
+  const maybeOut = maybe.filter((o) => o.planned.kind === 'expense').reduce((s, o) => s + o.amount, 0)
 
   const groups: Array<{ title: string; items: Occurrence[]; tone?: string }> = [
     { title: 'Atrasadas', items: occ.filter((o) => occStatus(o) === 'overdue'), tone: 'var(--red)' },
@@ -41,6 +44,12 @@ export function PlannedList({ month, onOpen, onPay, onNew }: Props) {
       {inc.total > 0 && (
         <p className="muted" style={{ fontSize: 13, margin: '8px 4px 0' }}>
           A receber: {brl(inc.open)} de {brl(inc.total)} previstos
+        </p>
+      )}
+
+      {maybe.length > 0 && (
+        <p className="muted" style={{ fontSize: 13, margin: '6px 4px 0' }}>
+          Possíveis (fora dos totais):{maybeIn ? ` +${brl(maybeIn)}` : ''}{maybeOut ? ` −${brl(maybeOut)}` : ''}
         </p>
       )}
 
